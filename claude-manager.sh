@@ -671,74 +671,36 @@ claude_manager() {
             ;;
 
         "help"|"h"|"")
-            cat << 'EOF'
-Claude Manager - Usage:
-
-Commands:
-  migrate <old_path> <new_path> [project_dir]
-    Purpose: After you have already moved/renamed your source directory,
-             update .jsonl session paths and optionally rename the Claude project
-             directory to match the new path's basename (safe, non-destructive).
-    Parameters:
-      - old_path: Absolute filesystem path to replace (e.g. "/Users/oldname/project")
-      - new_path: Absolute filesystem path to use instead (e.g. "/Users/newname/project")
-      - project_dir: [Optional] Full path to Claude project directory containing
-                     sessions that reference old_path (if omitted, you will be prompted)
-    Notes:
-      - No session IDs are required; this operates on all .jsonl in the project.
-      - If the destination Claude project dir doesn't exist, no creation is needed here; 
-        this command only updates session paths and may rename the existing project dir.
-
-  move <old_path> <new_path> <from_project_dir> <to_project_dir>
-    Purpose: Move BOTH your source code directory and the associated Claude project,
-             updating all .jsonl session paths to the new source path.
-    Parameters:
-      - old_path: Absolute path to the existing source directory
-      - new_path: Absolute path where the source directory should be moved
-      - from_project_dir: Full path to the current Claude project directory
-      - to_project_dir: Full path to the new Claude project directory location
-    Notes:
-      - This will: move source dir -> update sessions -> move Claude project dir.
-      - Use this when the source directory has NOT yet been moved.
-
-  full [new_path]
-    Purpose: Interactive helper intended to be run FROM the source directory you
-             want to move. Auto-detects the referring Claude project, accepts a
-             relative or absolute destination path, updates sessions, and moves
-             both the source and project directories.
-    Parameters:
-      - new_path: [Optional] Destination path; if omitted, you will be prompted and
-                  may enter a relative path which will be resolved against CWD.
-
-  list [project_dir]
-    Purpose: List all projects or sessions within a specific project
-    Parameters:
-      - project_dir: [Optional] Full path to Claude project directory
-                    (if omitted, will list all available projects)
-
-  config
-    Purpose: Display current configuration values for the Claude Manager
-
-Aliases:
-  cm, cm-migrate, cm-move, cm-full, cm-list
-
-Configuration (Environment Variables):
-  CLAUDE_DIR           - Claude directory (default: ~/.claude)
-  CLAUDE_BACKUP_STRATEGY - Backup strategy: file|project (default: file)
-                         file: backup each modified session file individually
-                         project: create a tarball of the entire project before changes
-  CLAUDE_INTERACTIVE   - Interactive mode: true|false (default: true)
-                         true: prompts for missing parameters and confirmations
-                         false: requires all parameters or exits with error
-  CLAUDE_DRY_RUN       - Dry run mode: true|false (default: false)
-                         true: shows what would happen without making changes
-
-Examples:
-  cm migrate "/Users/oldname/project" "/Users/newname/project"
-  cm move "/Users/name/.claude/projects/old-project" "/Users/name/.claude/projects/new-project"
-  cm full "/Users/old/path" "/Users/new/path" "/Users/name/.claude/projects/old" "/Users/name/.claude/projects/new"
-  CLAUDE_BACKUP_STRATEGY=project cm migrate "/old" "/new"
-EOF
+            echo "Claude Manager - Usage:"
+            echo ""
+            echo "Commands:"
+            echo "  migrate <old_path> <new_path> [project_dir]"
+            echo "    Update session paths after moving/renaming source directory"
+            echo ""
+            echo "  move <old_path> <new_path> <from_project> <to_project>"
+            echo "    Move both source directory and Claude project, updating sessions"
+            echo ""
+            echo "  full [new_path]"
+            echo "    Interactive helper - run from source directory to move"
+            echo ""
+            echo "  list [project_dir]"
+            echo "    List all projects or sessions within a specific project"
+            echo ""
+            echo "  config"
+            echo "    Display current configuration values"
+            echo ""
+            echo "Aliases: cm, cm-migrate, cm-move, cm-full, cm-list"
+            echo ""
+            echo "Configuration (Environment Variables):"
+            echo "  CLAUDE_DIR - Claude directory (default: ~/.claude)"
+            echo "  CLAUDE_BACKUP_STRATEGY - file|project (default: file)"
+            echo "  CLAUDE_INTERACTIVE - true|false (default: true)"
+            echo "  CLAUDE_DRY_RUN - true|false (default: false)"
+            echo ""
+            echo "Examples:"
+            echo '  cm migrate "/Users/old/project" "/Users/new/project"'
+            echo '  cm move "/old/src" "/new/src" "/old/claude" "/new/claude"'
+            echo '  CLAUDE_DRY_RUN=true cm list'
             ;;
 
         *)
