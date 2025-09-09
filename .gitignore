@@ -1,0 +1,63 @@
+# Claude Manager specific
+.claude/
+*.bak
+*_backup_*.tar.gz
+
+# Rust (for claude-session-tui)
+/claude-session-tui/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+# Keep Cargo.lock for binaries
+
+# Node.js / TypeScript (for federation-integration)
+node_modules/
+dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/
+.pnp.*
+*.tsbuildinfo
+.eslintcache
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Debug logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
