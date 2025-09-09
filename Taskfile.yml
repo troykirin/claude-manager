@@ -1,0 +1,178 @@
+version: '3'
+
+vars:
+  CLAUDE_DIR: ~/.claude
+  TUI_DIR: ./claude-session-tui
+  BIN_DIR: ~/.local/bin
+
+tasks:
+  help:
+    desc: "Show all available commands"
+    cmds:
+      - task --list-all
+    
+  quick-start:
+    desc: "Quick start guide for Claude Manager"
+    cmds:
+      - echo "Claude Manager Quick Start:"
+      - echo ""
+      - echo "Session Management:"
+      - echo "  task migrate    - Migrate sessions between paths" 
+      - echo "  task list       - List all projects and sessions"
+      - echo "  task backup     - Backup Claude sessions"
+      - echo ""
+      - echo "TUI Interface:"
+      - echo "  task tui:build  - Build the TUI interface"
+      - echo "  task tui:demo   - Run TUI demo with sample data"
+      - echo ""
+      - echo "Setup:"
+      - echo "  task install    - Install/update cm command"
+      - echo "  task health     - Check system health"
+
+  migrate:
+    desc: "Migrate Claude session paths (interactive)"
+    cmds:
+      - echo "Starting interactive migration..."
+      - cm migrate
+
+  list:
+    desc: "List all Claude projects and sessions"
+    cmds:
+      - cm list
+
+  config:
+    desc: "Show Claude Manager configuration"
+    cmds:
+      - cm config
+
+  backup:
+    desc: "Backup Claude sessions with timestamp"
+    cmds:
+      - |
+        BACKUP_DIR="$HOME/claude-backups/$(date +%Y%m%d_%H%M%S)"
+        mkdir -p "$BACKUP_DIR"
+        cp -r {{.CLAUDE_DIR}} "$BACKUP_DIR/"
+        echo "Backup created: $BACKUP_DIR"
+
+  tui:build:
+    desc: "Build the Claude Session TUI"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - echo "Building Claude Session TUI..."
+      - cargo build --release --features tui
+      - echo "TUI built successfully!"
+
+  tui:check:
+    desc: "Check TUI compilation without building"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - cargo check --features tui
+
+  tui:test:
+    desc: "Run TUI tests"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - cargo test --features tui
+
+  tui:demo:
+    desc: "Create and run TUI demo with sample data"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - echo "Creating demo session data..."
+      - mkdir -p demo_sessions
+      - |
+        cat > demo_sessions/sample.jsonl << 'EOF'
+        {"role": "user", "content": "Hello Claude!", "timestamp": "2025-01-15T10:00:00Z", "thread_id": "demo-1"}
+        {"role": "assistant", "content": "Hello! How can I help you today?", "timestamp": "2025-01-15T10:00:01Z", "thread_id": "demo-1"}
+        EOF
+      - echo "Demo data created in demo_sessions/"
+      - echo "Launching TUI with demo data... (press 'q' to quit)"
+      - cargo run --features tui -- demo_sessions
+
+  tui:run:
+    desc: "Run the TUI (optionally pass a directory)"
+    dir: "{{.TUI_DIR}}"
+    vars:
+      SESSIONS_DIR: "{{.SESSIONS_DIR | default "demo_sessions"}}"
+    cmds:
+      - |
+        if [ ! -d "{{.SESSIONS_DIR}}" ]; then
+          echo "Sessions dir '{{.SESSIONS_DIR}}' not found. Creating and seeding demo...";
+          mkdir -p demo_sessions;
+          cat > demo_sessions/sample.jsonl << 'EOF'
+          {"role": "user", "content": "Hello Claude!", "timestamp": "2025-01-15T10:00:00Z", "thread_id": "demo-1"}
+          {"role": "assistant", "content": "Hello! How can I help you today?", "timestamp": "2025-01-15T10:00:01Z", "thread_id": "demo-1"}
+          EOF
+        fi
+      - echo "Running TUI against '{{.SESSIONS_DIR}}' (press 'q' to quit)"
+      - cargo run --features tui -- {{.SESSIONS_DIR}}
+
+  install:
+    desc: "Install/update Claude Manager command"
+    cmds:
+      - echo "Installing Claude Manager..."
+      - mkdir -p {{.BIN_DIR}}
+      - cp claude-manager.sh {{.BIN_DIR}}/cm
+      - chmod +x {{.BIN_DIR}}/cm
+      - echo "Claude Manager installed as 'cm' command"
+
+  uninstall:
+    desc: "Uninstall Claude Manager"
+    cmds:
+      - rm -f {{.BIN_DIR}}/cm
+      - rm -f {{.BIN_DIR}}/cpm
+      - echo "Claude Manager uninstalled"
+
+  dev:setup:
+    desc: "Setup development environment"
+    cmds:
+      - echo "Setting up Claude Manager development environment..."
+      - task install
+      - task tui:build
+      - echo "Development setup complete!"
+
+  clean:
+    desc: "Clean build artifacts"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - cargo clean
+      - rm -rf demo_sessions/
+      - echo "Cleaned build artifacts"
+
+  health:
+    desc: "Check Claude Manager system health"
+    cmds:
+      - echo "Claude Manager Health Check:"
+      - echo ""
+      - |
+        if [ -d {{.CLAUDE_DIR}} ]; then
+          echo "Claude directory: Found"
+        else
+          echo "Claude directory: Missing"
+        fi
+      - |
+        if command -v cm >/dev/null; then
+          echo "cm command: Available"
+        else
+          echo "cm command: Not found"
+        fi
+      - |
+        if command -v cargo >/dev/null; then
+          echo "Rust toolchain: Available"
+        else
+          echo "Rust toolchain: Not found"
+        fi
+
+  bench:
+    desc: "Run TUI performance benchmarks"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - echo "Running performance benchmarks..."
+      - cargo bench
+
+  docs:
+    desc: "Generate and open documentation"
+    dir: "{{.TUI_DIR}}"
+    cmds:
+      - echo "Generating documentation..."
+      - cargo doc --open --no-deps
