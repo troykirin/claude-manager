@@ -1,4 +1,4 @@
-# Claude Project Migrator
+# Claude Manager
 
 A comprehensive CLI tool for migrating Claude projects and updating session paths when you move or rename your development directories.
 
@@ -82,47 +82,50 @@ export CLAUDE_DRY_RUN="false"
 
 ```bash
 # Migrate session paths (interactive)
-cpm migrate
+cm migrate
 
 # Move sessions between projects
-cpm move
+cm move
 
 # Full migration (paths + move)
-cpm full
+cm full
 
 # List projects and sessions
-cpm list
+cm list
 ```
 
 ### Advanced Usage
 
 ```bash
 # Non-interactive path migration
-cpm migrate "/old/path" "/new/path" "/project/dir"
+cm migrate "/old/path" "/new/path" "/project/dir"
 
 # Move sessions with explicit paths
-cpm move "/old/project" "/new/project"
+cm move "/old/project" "/new/project"
 
 # Full migration with all parameters
-cpm full "/old/path" "/new/path" "/old/project" "/new/project"
+cm full "/old/path" "/new/path" "/old/project" "/new/project"
 
 # Use project backup strategy
-CLAUDE_BACKUP_STRATEGY=project cpm migrate "/old" "/new"
+CLAUDE_BACKUP_STRATEGY=project cm migrate "/old" "/new"
 
 # Dry run to preview changes
-CLAUDE_DRY_RUN=true cpm migrate "/old/path" "/new/path"
+CLAUDE_DRY_RUN=true cm migrate "/old/path" "/new/path"
 ```
 
 ### Command Reference
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `migrate` | `m` | Update session paths |
-| `move` | `mv` | Move sessions between projects |
-| `full` | `f` | Complete migration (paths + move) |
-| `list` | `ls`, `l` | List projects or sessions |
+| `migrate` | `m`, `cm-migrate` | Update session paths |
+| `move` | `mv`, `cm-move` | Move sessions between projects |
+| `full` | `f`, `cm-full` | Complete migration (paths + move) |
+| `list` | `ls`, `l`, `cm-list` | List projects or sessions |
 | `config` | `cfg` | Show current configuration |
 | `help` | `h` | Show help information |
+
+Aliases:
+  cm, cm-migrate, cm-move, cm-full, cm-list
 
 ## Backup Strategies
 
@@ -143,20 +146,20 @@ CLAUDE_DRY_RUN=true cpm migrate "/old/path" "/new/path"
 ### Scenario 1: Project Renamed
 ```bash
 # You renamed /Users/tryk/dev/my-project to /Users/tryk/dev/my-awesome-project
-cpm migrate "/Users/tryk/dev/my-project" "/Users/tryk/dev/my-awesome-project"
+cm migrate "/Users/tryk/dev/my-project" "/Users/tryk/dev/my-awesome-project"
 ```
 
 ### Scenario 2: Project Moved
 ```bash
 # You moved /Users/tryk/dev/project to /Users/tryk/NabiaTech/project
-cpm full "/Users/tryk/dev/project" "/Users/tryk/NabiaTech/project" \
+cm full "/Users/tryk/dev/project" "/Users/tryk/NabiaTech/project" \
          "/old/project/id" "/new/project/id"
 ```
 
 ### Scenario 3: Organization Restructure
 ```bash
 # Multiple projects moved to new structure
-CLAUDE_BACKUP_STRATEGY=project cpm migrate "/old/base/path" "/new/base/path"
+CLAUDE_BACKUP_STRATEGY=project cm migrate "/old/base/path" "/new/base/path"
 ```
 
 ## Safety Features
@@ -172,7 +175,7 @@ CLAUDE_BACKUP_STRATEGY=project cpm migrate "/old/base/path" "/new/base/path"
 ### No sessions found
 ```bash
 # Check if Claude directory exists
-cpm list
+cm list
 
 # Verify Claude has been used
 ls ~/.claude/projects/
@@ -187,8 +190,8 @@ chmod -R 755 ~/.claude/
 ### Sessions not updating
 ```bash
 # Check for syntax errors in sessions
-cpm config
-CLAUDE_DRY_RUN=true cpm migrate "old" "new"
+cm config
+CLAUDE_DRY_RUN=true cm migrate "old" "new"
 ```
 
 ### Backup restoration

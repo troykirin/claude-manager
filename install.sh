@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Claude Project Migrator Installation Script
+# Claude Manager Installation Script
 
 set -e
 
@@ -8,14 +8,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$HOME/.local/bin"
 CLAUDE_DIR="$HOME/.claude"
 
-echo "Installing Claude Project Migrator..."
+echo "Installing Claude Manager..."
 
 # Create necessary directories
 mkdir -p "$INSTALL_DIR"
 
 # Copy the main script
-cp "$SCRIPT_DIR/claude-project-migrator.sh" "$INSTALL_DIR/claude-project-migrator"
-chmod +x "$INSTALL_DIR/claude-project-migrator"
+cp "$SCRIPT_DIR/claude-manager.sh" "$INSTALL_DIR/claude-manager"
+chmod +x "$INSTALL_DIR/claude-manager"
 
 # Detect shell
 SHELL_RC=""
@@ -30,15 +30,15 @@ fi
 # Add to shell rc if detected
 if [[ -n "$SHELL_RC" && -f "$SHELL_RC" ]]; then
     echo ""
-    echo "Would you like to add Claude Project Migrator to your $SHELL_RC? (y/n)"
+    echo "Would you like to add Claude Manager to your $SHELL_RC? (y/n)"
     read -r response
-    
+
     if [[ "$response" =~ ^[Yy]$ ]]; then
         # Check if already added
-        if ! grep -q "claude-project-migrator" "$SHELL_RC"; then
+        if ! grep -q "claude-manager" "$SHELL_RC"; then
             echo "" >> "$SHELL_RC"
-            echo "# Claude Project Migrator" >> "$SHELL_RC"
-            echo "source \"$INSTALL_DIR/claude-project-migrator\"" >> "$SHELL_RC"
+            echo "# Claude Manager" >> "$SHELL_RC"
+            echo "source \"$INSTALL_DIR/claude-manager\"" >> "$SHELL_RC"
             echo "Added to $SHELL_RC"
         else
             echo "Already exists in $SHELL_RC"
@@ -53,44 +53,44 @@ echo "Would you like to set up configuration? (y/n)"
 read -r config_response
 
 if [[ "$config_response" =~ ^[Yy]$ ]]; then
-    CONFIG_FILE="$HOME/.claude-project-migrator.conf"
-    
+    CONFIG_FILE="$HOME/.claude-manager.conf"
+
     # Claude directory
     read -p "Claude directory (default: $CLAUDE_DIR): " user_claude_dir
     claude_dir="${user_claude_dir:-$CLAUDE_DIR}"
-    
+
     # Backup strategy
     echo "Backup strategy:"
     echo "  1. file - Create .bak files for each session"
     echo "  2. project - Create .tar.gz backup of entire project"
     read -p "Choose backup strategy (1-2, default: 1): " backup_choice
-    
+
     case "$backup_choice" in
         "2") backup_strategy="project" ;;
         *) backup_strategy="file" ;;
     esac
-    
+
     # Interactive mode
     read -p "Enable interactive mode by default? (Y/n): " interactive_choice
     case "$interactive_choice" in
         [Nn]*) interactive_mode="false" ;;
         *) interactive_mode="true" ;;
     esac
-    
+
     # Write configuration
     cat > "$CONFIG_FILE" << EOF
-# Claude Project Migrator Configuration
+# Claude Manager Configuration
 export CLAUDE_DIR="$claude_dir"
 export CLAUDE_BACKUP_STRATEGY="$backup_strategy"
 export CLAUDE_INTERACTIVE="$interactive_mode"
 export CLAUDE_DRY_RUN="false"
 EOF
-    
+
     echo "Configuration saved to: $CONFIG_FILE"
-    
+
     # Add config to shell rc
     if [[ -n "$SHELL_RC" ]]; then
-        if ! grep -q "claude-project-migrator.conf" "$SHELL_RC"; then
+        if ! grep -q "claude-manager.conf" "$SHELL_RC"; then
             echo "source \"$CONFIG_FILE\"" >> "$SHELL_RC"
             echo "Configuration added to $SHELL_RC"
         fi
@@ -101,12 +101,12 @@ echo ""
 echo "Installation complete!"
 echo ""
 echo "To use immediately in this session, run:"
-echo "  source $INSTALL_DIR/claude-project-migrator"
+echo "  source $INSTALL_DIR/claude-manager"
 echo ""
 echo "Usage examples:"
-echo "  cpm migrate \"/old/path\" \"/new/path\""
-echo "  cpm move \"/old/project\" \"/new/project\""
-echo "  cpm full \"/old/path\" \"/new/path\" \"/old/project\" \"/new/project\""
+echo "  cm migrate \"/old/path\" \"/new/path\""
+echo "  cm move \"/old/project\" \"/new/project\""
+echo "  cm full \"/old/path\" \"/new/path\" \"/old/project\" \"/new/project\""
 echo ""
 
 # Check Claude directory
