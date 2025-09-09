@@ -1,3 +1,5 @@
+# https://taskfile.dev
+
 version: '3'
 
 vars:
@@ -17,7 +19,7 @@ tasks:
       - echo "Claude Manager Quick Start:"
       - echo ""
       - echo "Session Management:"
-      - echo "  task migrate    - Migrate sessions between paths" 
+      - echo "  task migrate    - Migrate sessions between paths"
       - echo "  task list       - List all projects and sessions"
       - echo "  task backup     - Backup Claude sessions"
       - echo ""
@@ -25,9 +27,19 @@ tasks:
       - echo "  task tui:build  - Build the TUI interface"
       - echo "  task tui:demo   - Run TUI demo with sample data"
       - echo ""
+      - echo "Federation Integration:"
+      - echo "  task federation:install - Install federation dependencies"
+      - echo "  task federation:build   - Build federation components"
+      - echo "  task federation:dev     - Start federation dev server"
+      - echo ""
+      - echo "Combined Tasks:"
+      - echo "  task all:build          - Build all components"
+      - echo "  task all:test           - Test all components"
+      - echo "  task dev:setup          - Setup development environment"
+      - echo ""
       - echo "Setup:"
-      - echo "  task install    - Install/update cm command"
-      - echo "  task health     - Check system health"
+      - echo "  task install            - Install/update cm command"
+      - echo "  task health             - Check system health"
 
   migrate:
     desc: "Migrate Claude session paths (interactive)"
@@ -93,7 +105,8 @@ tasks:
     desc: "Run the TUI (optionally pass a directory)"
     dir: "{{.TUI_DIR}}"
     vars:
-      SESSIONS_DIR: "{{.SESSIONS_DIR | default "demo_sessions"}}"
+      SESSIONS_DIR:
+        sh: echo "${SESSIONS_DIR:-demo_sessions}"
     cmds:
       - |
         if [ ! -d "{{.SESSIONS_DIR}}" ]; then
@@ -176,3 +189,59 @@ tasks:
     cmds:
       - echo "Generating documentation..."
       - cargo doc --open --no-deps
+
+  federation:install:
+    desc: "Install federation-integration dependencies"
+    dir: federation-integration
+    cmds:
+      - echo "Installing federation dependencies..."
+      - npm install
+
+  federation:build:
+    desc: "Build federation-integration"
+    dir: federation-integration
+    cmds:
+      - echo "Building federation integration..."
+      - npm run build
+
+  federation:test:
+    desc: "Test federation-integration"
+    dir: federation-integration
+    cmds:
+      - echo "Running federation tests..."
+      - npm test
+
+  federation:dev:
+    desc: "Start federation development server"
+    dir: federation-integration
+    cmds:
+      - echo "Starting federation dev server..."
+      - npm run dev
+
+  all:build:
+    desc: "Build all components (TUI + Federation)"
+    cmds:
+      - task tui:build
+      - task federation:build
+      - echo "All components built successfully!"
+
+  all:test:
+    desc: "Test all components"
+    cmds:
+      - task tui:test
+      - task federation:test
+      - echo "All tests completed!"
+
+  all:clean:
+    desc: "Clean all build artifacts"
+    cmds:
+      - task clean
+      - task federation:clean
+      - echo "All artifacts cleaned!"
+
+  federation:clean:
+    desc: "Clean federation build artifacts"
+    dir: federation-integration
+    cmds:
+      - rm -rf dist/ node_modules/.cache
+      - echo "Federation artifacts cleaned"
