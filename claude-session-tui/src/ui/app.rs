@@ -3,9 +3,11 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -84,7 +86,7 @@ impl App {
         // Update help text based on view mode
         let help_text = match self.view_mode {
             ViewMode::SnippetBrowser => "n/p:navigate  ↑↓:scroll  v:exit  q:quit",
-            _ => "Keys: / search  v toggle view  j/k/↑/↓ navigate  q quit",
+            _ => "Keys: / search  v toggle view  j/k/↑/↓ navigate (works in search)  q quit",
         };
         let size = frame.area();
 
@@ -104,11 +106,17 @@ impl App {
         };
         frame.render_widget(search_bar, chunks[0]);
 
-        // Main content below
+        // Create layout for main content with footer
+        let content_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .split(chunks[1]);
+
+        // Main content area (sessions + details)
         let main_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
-            .split(chunks[1]);
+            .split(content_chunks[0]);
 
         // Left pane: filtered sessions list
         let items: Vec<ListItem> = if self.filtered_sessions.is_empty() {
@@ -241,6 +249,13 @@ impl App {
                 self.render_snippet_browser(frame, right_area);
             }
         }
+
+        // Footer with version info
+        let version_text = format!("v{}", VERSION);
+        let footer = Paragraph::new(version_text)
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Right);
+        frame.render_widget(footer, content_chunks[1]);
     }
 
     /// Handle keyboard input
@@ -258,15 +273,19 @@ impl App {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true
             }
-            // Vim-style navigation (must come before general Char)
+            // Vim-style navigation (prioritize navigation over search input)
             KeyCode::Char('j') => {
-                if !self.is_searching && self.selected + 1 < self.filtered_sessions.len() {
+                if self.selected + 1 < self.filtered_sessions.len() {
                     self.selected += 1;
+                } else if self.is_searching {
+                    self.search_query.push('j');
                 }
             }
             KeyCode::Char('k') => {
-                if !self.is_searching && self.selected > 0 {
+                if self.selected > 0 {
                     self.selected -= 1;
+                } else if self.is_searching {
+                    self.search_query.push('k');
                 }
             }
             KeyCode::Char('v') => {
@@ -283,11 +302,13 @@ impl App {
                     }
                 }
             }
-            // Snippet browser controls
+            // Snippet browser controls (work in any mode, don't add to search)
             KeyCode::Char('n') => {
                 if self.view_mode == ViewMode::SnippetBrowser && !self.search_matches.is_empty() {
                     self.snippet_index = (self.snippet_index + 1) % self.search_matches.len();
                     self.snippet_scroll_offset = 0;
+                } else if self.is_searching {
+                    self.search_query.push('n');
                 }
             }
             KeyCode::Char('p') => {
@@ -298,6 +319,8 @@ impl App {
                         self.snippet_index - 1
                     };
                     self.snippet_scroll_offset = 0;
+                } else if self.is_searching {
+                    self.search_query.push('p');
                 }
             }
             KeyCode::Char('/') => {
