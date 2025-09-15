@@ -6,7 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
+    text::Line,
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
@@ -113,37 +113,36 @@ impl App {
             );
         frame.render_stateful_widget(sessions_list, main_chunks[0], &mut state);
 
-        // Right pane: details/help
-        let right_content = if let Some(err) = &self.error_message {
-            Text::from(vec![Line::from(vec![
-                Span::styled(
-                    "Error: ",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(err),
-            ])])
-        } else if let Some(session) = self.filtered_sessions.get(self.selected) {
-            let header = Line::from(vec![
-                Span::styled(
-                    "Session: ",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(session.metadata.file_path.clone()),
-            ]);
-            let stats = Line::from(format!(
-                "Blocks: {}  Duration: {:?}",
-                session.statistics.total_blocks,
-                session.duration()
-            ));
-            let help = Line::from("Keys: / search  ↑/↓ navigate  q quit");
-            Text::from(vec![header, stats, Line::from(""), help])
+        // Right pane: always show status info like ratatui-demo
+        let selected_session_name = self
+            .filtered_sessions
+            .get(self.selected)
+            .map(|s| s.metadata.file_path.clone())
+            .unwrap_or_else(|| "None".to_string());
+
+        let status_text = if self.is_searching {
+            "Searching".to_string()
+        } else if let Some(err) = &self.error_message {
+            format!("Error: {}", err)
         } else {
-            Text::from("Select a session. Keys: / search  ↑/↓ navigate  q quit")
+            "Ready".to_string()
         };
+
+        let right_content = vec![
+            Line::from(format!("Total Sessions: {}", self.sessions.len())),
+            Line::from(format!("Filtered: {}", self.filtered_sessions.len())),
+            Line::from(format!(
+                "Selected: {} ({})",
+                self.selected + 1,
+                selected_session_name
+            )),
+            Line::from(format!("Status: {}", status_text)),
+            Line::from(""),
+            Line::from("Keys: / search  j/k/↑/↓ navigate  q quit"),
+        ];
+
         let details = Paragraph::new(right_content)
-            .block(Block::default().title("Details").borders(Borders::ALL));
+            .block(Block::default().title("Status").borders(Borders::ALL));
         frame.render_widget(details, main_chunks[1]);
     }
 
@@ -161,6 +160,17 @@ impl App {
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.should_quit = true
+            }
+            // Vim-style navigation (must come before general Char)
+            KeyCode::Char('j') => {
+                if !self.is_searching && self.selected + 1 < self.filtered_sessions.len() {
+                    self.selected += 1;
+                }
+            }
+            KeyCode::Char('k') => {
+                if !self.is_searching && self.selected > 0 {
+                    self.selected -= 1;
+                }
             }
             KeyCode::Char('/') => {
                 self.is_searching = true;
@@ -192,7 +202,7 @@ impl App {
                     self.selected += 1;
                 }
             }
-            _ => {}
+            _ => {} // Catch all other key codes
         }
         Ok(())
     }
