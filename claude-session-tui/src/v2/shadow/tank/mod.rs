@@ -11,6 +11,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Semaphore;
+use tokio_stream::wrappers::LinesStream;
 
 /// Tank's high-performance parallel parser
 pub struct TankParser {
@@ -70,29 +71,19 @@ impl TankParser {
         R: tokio::io::AsyncRead + Send + Unpin + 'static,
     {
         let buf_reader = BufReader::new(reader);
-        let lines_stream = buf_reader.lines();
+        let lines_stream = LinesStream::new(buf_reader.lines());
+        let max_concurrency = self.max_concurrency;
 
-        let session_stream = lines_stream
-            .try_chunks(self.chunk_size)
-            .map_err(|e| TankError::IoError(e.into_inner()))
-            .try_filter_map(|chunk| async move {
-                if chunk.is_empty() {
-                    return Ok(None);
-                }
-
-                match self.parse_session_group(chunk).await {
-                    Ok(session) => Ok(Some(session)),
-                    Err(e) => {
-                        // Apply error recovery
-                        if self.error_recovery.should_skip_error(&e) {
-                            eprintln!("Skipping recoverable error: {}", e);
-                            Ok(None)
-                        } else {
-                            Err(e)
-                        }
-                    }
-                }
-            });
+        // Create a simpler stream that processes lines one by one
+        let session_stream =
+            lines_stream
+                .map_err(TankError::IoError)
+                .and_then(move |line| async move {
+                    // Simple approach: treat each line as a potential message
+                    let temp_parser = TankParser::new(max_concurrency);
+                    let lines = vec![line];
+                    temp_parser.parse_session_group(lines).await
+                });
 
         Box::pin(session_stream)
     }
@@ -147,7 +138,7 @@ impl TankParser {
         for line in lines {
             match serde_json::from_str::<BeruMessage>(&line) {
                 Ok(message) => messages.push(message),
-                Err(e) => {
+                Err(_e) => {
                     parse_errors += 1;
 
                     // Attempt flexible parsing
@@ -264,7 +255,11 @@ impl AsyncParser<String, BeruSession> for TankParser {
     where
         S: Stream<Item = String> + Send + 'static,
     {
-        let stream = input.then(move |content| async move { self.parse_single(content).await });
+        let max_concurrency = self.max_concurrency;
+        let stream = input.then(move |content| async move {
+            let temp_parser = TankParser::new(max_concurrency);
+            temp_parser.parse_single(content).await
+        });
 
         Box::pin(stream)
     }
@@ -293,6 +288,7 @@ impl ShadowAgent for TankParser {
 }
 
 /// Error recovery strategies for Tank
+#[derive(Clone)]
 pub struct TankErrorRecovery {
     max_skip_errors: usize,
     skip_error_types: Vec<TankErrorType>,

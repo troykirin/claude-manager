@@ -103,17 +103,17 @@ pub trait AsyncRenderer<T>: Send + Sync {
 
 /// Search engine abstraction with indexing and real-time updates
 #[async_trait]
-pub trait SearchEngine<Query, Result>: Send + Sync {
+pub trait SearchEngine<Query, SearchResult>: Send + Sync {
     type Error: Error + Send + Sync + 'static;
 
-    async fn search(&self, query: Query) -> Result<Vec<Result>, Self::Error>;
+    async fn search(&self, query: Query) -> Result<Vec<SearchResult>, Self::Error>;
     async fn index(&mut self, documents: Vec<Document>) -> Result<(), Self::Error>;
 
     // Real-time search with streaming results
     async fn stream_search<S>(
         &self,
         query_stream: S,
-    ) -> Pin<Box<dyn Stream<Item = Result<Vec<Result>, Self::Error>> + Send>>
+    ) -> Pin<Box<dyn Stream<Item = Result<Vec<SearchResult>, Self::Error>> + Send>>
     where
         S: Stream<Item = Query> + Send + 'static;
 
@@ -163,7 +163,7 @@ pub struct Document {
     pub metadata: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum MessageRole {
     Human,
     Assistant,

@@ -162,7 +162,7 @@ pub struct BeruUsage {
 }
 
 /// Session metadata from Claude
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BeruSessionMetadata {
     pub model: Option<String>,
     pub temperature: Option<f32>,

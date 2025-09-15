@@ -4,11 +4,11 @@
 //! generation with advanced pattern recognition and performance optimization.
 
 use crate::v2::core::traits::{
-    InsightCategory, InsightData, InsightsEngine, PerformanceMetrics, ShadowAgent,
+    InsightCategory, InsightData, InsightsEngine, MessageData, PerformanceMetrics, ShadowAgent,
 };
 use crate::v2::shadow::beru::{BeruMessage, BeruSession};
 use async_trait::async_trait;
-use futures::{Stream, StreamExt};
+use futures::{stream::StreamExt, Stream};
 use std::collections::{HashMap, VecDeque};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -75,7 +75,7 @@ impl IronEngine {
 
         // Check cache first
         {
-            let cache = self.cache.read().await;
+            let mut cache = self.cache.write().await;
             if let Some(cached_insights) = cache.get(&session_id) {
                 if !self
                     .needs_recomputation(session, &cached_insights.computed_at)
@@ -156,7 +156,7 @@ impl IronEngine {
             metadata: IronInsightMetadata {
                 computation_time_ms: 10,
                 data_points: session.messages.len(),
-                patterns_found: topics,
+                patterns_found: topics.clone(),
                 metrics: HashMap::from([
                     (
                         "topic_diversity".to_string(),
@@ -256,6 +256,8 @@ impl IronEngine {
             .collect();
 
         let unique_tools: std::collections::HashSet<&str> = tool_calls.iter().cloned().collect();
+        let unique_tools_count = unique_tools.len();
+        let unique_tools_vec: Vec<String> = unique_tools.iter().map(|s| s.to_string()).collect();
 
         Ok(IronInsight {
             session_id: session.uuid.clone(),
@@ -264,15 +266,15 @@ impl IronEngine {
             summary: format!(
                 "Tools used: {} total, {} unique",
                 tool_calls.len(),
-                unique_tools.len()
+                unique_tools_count
             ),
             metadata: IronInsightMetadata {
                 computation_time_ms: 5,
                 data_points: tool_calls.len(),
-                patterns_found: unique_tools.into_iter().map(String::from).collect(),
+                patterns_found: unique_tools_vec,
                 metrics: HashMap::from([
                     ("total_tool_calls".to_string(), tool_calls.len() as f64),
-                    ("unique_tools".to_string(), unique_tools.len() as f64),
+                    ("unique_tools".to_string(), unique_tools_count as f64),
                 ]),
             },
             computed_at: chrono::Utc::now(),
@@ -400,24 +402,42 @@ impl InsightsEngine<BeruSession> for IronEngine {
     where
         S: Stream<Item = BeruSession> + Send + 'static,
     {
-        let stream = data_stream.then(move |session| async move {
-            match self.analyze_incremental(&session).await {
-                Ok(insights) => Ok(insights.into_iter().next().unwrap_or_else(|| IronInsight {
-                    session_id: session.uuid.clone(),
-                    category: InsightCategory::Topic,
-                    confidence: 0.0,
-                    summary: "No insights generated".to_string(),
-                    metadata: IronInsightMetadata {
-                        computation_time_ms: 0,
-                        data_points: 0,
-                        patterns_found: vec![],
-                        metrics: HashMap::new(),
-                    },
-                    computed_at: chrono::Utc::now(),
-                })),
-                Err(e) => Err(e),
-            }
-        });
+        // For this implementation, we'll process sessions and return first insight
+        // In a real implementation, we might want to return all insights
+        let stream = data_stream
+            .map(|session| async move {
+                // Create a new engine instance with cloned components for thread safety
+                let temp_engine = IronEngine {
+                    cache: Arc::new(RwLock::new(IronCache::new(1000))),
+                    pattern_analyzer: IronPatternAnalyzer::new(),
+                    metrics_collector: IronMetricsCollector::new(),
+                    incremental_state: Arc::new(RwLock::new(IronIncrementalState::new())),
+                };
+
+                match temp_engine.analyze_incremental(&session).await {
+                    Ok(insights) => {
+                        if let Some(insight) = insights.into_iter().next() {
+                            Ok(insight)
+                        } else {
+                            Ok(IronInsight {
+                                session_id: session.uuid.clone(),
+                                category: InsightCategory::Topic,
+                                confidence: 0.0,
+                                summary: "No insights generated".to_string(),
+                                metadata: IronInsightMetadata {
+                                    computation_time_ms: 0,
+                                    data_points: 0,
+                                    patterns_found: vec![],
+                                    metrics: HashMap::new(),
+                                },
+                                computed_at: chrono::Utc::now(),
+                            })
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
+            })
+            .buffered(10); // Process up to 10 items concurrently
 
         Box::pin(stream)
     }
@@ -493,6 +513,7 @@ pub struct CachedInsights {
 }
 
 /// Pattern analysis for Iron
+#[derive(Clone)]
 pub struct IronPatternAnalyzer {
     topic_keywords: HashMap<String, Vec<String>>,
 }
@@ -586,6 +607,7 @@ impl IronPatternAnalyzer {
 }
 
 /// Metrics collection for Iron
+#[derive(Clone)]
 pub struct IronMetricsCollector;
 
 impl IronMetricsCollector {
