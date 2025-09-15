@@ -25,6 +25,9 @@ pub mod parser;
 #[cfg(feature = "tui")]
 pub mod ui;
 
+#[cfg(feature = "v2")]
+pub mod v2;
+
 pub use api::*;
 pub use error::*;
 pub use extractor::*;

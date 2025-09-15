@@ -23,6 +23,10 @@ walkdir = "2.4"
 futures = "0.3"
 num_cpus = "1.16"
 
+# V2 Shadow Renaissance Architecture dependencies
+async-trait = { version = "0.1", optional = true }
+pin-project = { version = "1.1", optional = true }
+
 # Search engine dependencies
 tantivy = "0.22"
 fuzzy-matcher = "0.3"
@@ -42,6 +46,8 @@ textwrap = "0.16"
 [features]
 default = []
 tui = []
+v2 = ["async-trait", "pin-project"]
+shadow = ["v2"]
 
 [[bin]]
 name = "claude-session-tui"
