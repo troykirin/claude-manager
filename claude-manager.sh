@@ -563,9 +563,10 @@ _suggest_project_dir_for() {
     local new_path="$1"
     
     # Convert absolute path to Claude Code project naming convention
-    # Example: /Users/tryk/nabia/chats/auras/senku2 -> -Users-tryk-nabia-chats-auras-senku2
+    # Claude uses double dashes for dots in paths and single dash for path separators
+    # Example: /Users/tryk/.claude/sync -> -Users-tryk--claude-sync
     local encoded_name
-    encoded_name=$(echo "$new_path" | sed 's|^/||' | sed 's|/|-|g')
+    encoded_name=$(echo "$new_path" | sed 's|^/||' | sed 's|\.|-|g' | sed 's|/|-|g')
     echo "$CLAUDE_DIR/projects/-${encoded_name}"
 }
 
@@ -1190,6 +1191,277 @@ claude_manager() {
             fi
             ;;
             
+        "organize"|"org")
+            # Granular session organization commands
+            local subcmd="$2"
+            
+            case "$subcmd" in
+                "extract"|"e")
+                    # Extract specific session UUID to target directory
+                    local uuid="$3"
+                    local source_dir="$4"
+                    local target_dir="$5"
+                    
+                    # Handle --from and --to flags for better UX
+                    if [[ "$uuid" == "--help" || -z "$uuid" ]]; then
+                        _log_info "Usage: cm organize extract <uuid> --from <source> --to <target>"
+                        _log_info "   or: cm organize extract <uuid> <source> <target>"
+                        _log_info ""
+                        _log_info "Extract a single session by UUID to another directory"
+                        _log_info "Creates target if it doesn't exist, merges if it does"
+                        return 0
+                    fi
+                    
+                    # Parse --from and --to flags if present
+                    local args=("$@")
+                    for i in "${!args[@]}"; do
+                        if [[ "${args[$i]}" == "--from" ]]; then
+                            source_dir="${args[$((i+1))]}"
+                        elif [[ "${args[$i]}" == "--to" ]]; then
+                            target_dir="${args[$((i+1))]}"
+                        fi
+                    done
+                    
+                    if [[ -z "$source_dir" || -z "$target_dir" ]]; then
+                        _log_error "Source and target directories required"
+                        _log_info "Usage: cm organize extract <uuid> --from <source> --to <target>"
+                        return 1
+                    fi
+                    
+                    # Validate UUID format (basic check)
+                    if [[ ! "$uuid" =~ ^[a-f0-9-]{36}$ ]]; then
+                        _log_error "Invalid UUID format: $uuid"
+                        _log_info "Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                        return 1
+                    fi
+                    
+                    # Resolve paths
+                    source_dir=$(_resolve_absolute_path "$(pwd)" "$source_dir")
+                    target_dir=$(_resolve_absolute_path "$(pwd)" "$target_dir")
+                    
+                    # Normalize paths
+                    source_dir="${source_dir%/}"
+                    target_dir="${target_dir%/}"
+                    
+                    # Find source project
+                    local source_project
+                    source_project=$(_suggest_project_dir_for "$source_dir")
+                    
+                    if [[ ! -d "$source_project" ]]; then
+                        _log_error "Source project not found for: $source_dir"
+                        _log_info "Expected project: $source_project"
+                        return 1
+                    fi
+                    
+                    # Find session file
+                    local session_file="$source_project/${uuid}.jsonl"
+                    if [[ ! -f "$session_file" ]]; then
+                        _log_error "Session not found: $uuid"
+                        _log_info "Looking in: $source_project"
+                        
+                        # Try to help find similar UUIDs
+                        _log_info "Available sessions in project:"
+                        local found_any=false
+                        while IFS= read -r f; do
+                            local base
+                            base=$(basename "$f" .jsonl)
+                            if [[ "$base" == *"${uuid:0:8}"* ]]; then
+                                echo "  $base"
+                                found_any=true
+                            fi
+                        done < <(find "$source_project" -name "*.jsonl" -type f | head -20)
+                        
+                        if [[ "$found_any" == "false" ]]; then
+                            _log_info "  (showing first few)"
+                            find "$source_project" -name "*.jsonl" -type f | head -5 | while read -r f; do
+                                echo "  $(basename "$f" .jsonl)"
+                            done
+                        fi
+                        return 1
+                    fi
+                    
+                    # Check session content references source_dir
+                    local ref_count
+                    ref_count=$(grep -c "\"cwd\":\"$source_dir\"" "$session_file" 2>/dev/null || echo 0)
+                    
+                    if [[ "$ref_count" -eq 0 ]]; then
+                        _log_warn "Session $uuid doesn't reference $source_dir"
+                        
+                        # Show what paths it does reference
+                        local actual_paths
+                        actual_paths=$(grep -o '"cwd":"[^"]*"' "$session_file" 2>/dev/null | \
+                                      sed 's/"cwd":"\([^"]*\)"/\1/' | sort -u | head -3)
+                        if [[ -n "$actual_paths" ]]; then
+                            _log_info "Session references these paths instead:"
+                            echo "$actual_paths" | while read -r p; do
+                                echo "  $p"
+                            done
+                        fi
+                        
+                        if [[ "$INTERACTIVE" == "true" ]]; then
+                            if ! _confirm "Extract anyway?"; then
+                                _log_info "Extraction cancelled"
+                                return 1
+                            fi
+                        else
+                            _log_error "Session doesn't match source directory (use INTERACTIVE=true to override)"
+                            return 1
+                        fi
+                    else
+                        _log_info "Session has $ref_count references to $source_dir"
+                    fi
+                    
+                    # Prepare target
+                    local target_project
+                    target_project=$(_suggest_project_dir_for "$target_dir")
+                    
+                    _log_info "=== Extract Operation Plan ==="
+                    _log_info "Session:        $uuid"
+                    _log_info "Source dir:     $source_dir"  
+                    _log_info "Target dir:     $target_dir"
+                    _log_info "Source project: $(basename "$source_project")"
+                    _log_info "Target project: $(basename "$target_project")"
+                    
+                    # Check for conflicts
+                    local target_session="$target_project/${uuid}.jsonl"
+                    if [[ -f "$target_session" ]]; then
+                        _log_warn "Session already exists in target"
+                        
+                        local source_size target_size
+                        source_size=$(wc -c < "$session_file")
+                        target_size=$(wc -c < "$target_session")
+                        
+                        _log_info "Source size: $source_size bytes"
+                        _log_info "Target size: $target_size bytes"
+                        
+                        if [[ "$source_size" -eq "$target_size" ]]; then
+                            _log_info "Files appear identical (same size)"
+                        else
+                            _log_warn "Files differ in size"
+                        fi
+                        
+                        if [[ "$INTERACTIVE" == "true" ]]; then
+                            if ! _confirm "Overwrite existing session in target?"; then
+                                _log_info "Extraction cancelled"
+                                return 1
+                            fi
+                        else
+                            _log_error "Target session exists (use INTERACTIVE=true to overwrite)"
+                            return 1
+                        fi
+                    fi
+                    
+                    # Interactive confirmation (before dry run for better UX)
+                    if [[ "$INTERACTIVE" == "true" && "$DRY_RUN" != "true" ]]; then
+                        if ! _confirm "Proceed with extraction?"; then
+                            _log_info "Extraction cancelled"
+                            return 1
+                        fi
+                    fi
+                    
+                    # Dry run check
+                    if [[ "$DRY_RUN" == "true" ]]; then
+                        _log_info "=== DRY RUN - No changes made ==="
+                        _log_debug "Would create: $target_project (if needed)"
+                        _log_debug "Would copy: $session_file -> $target_session"
+                        _log_debug "Would update $ref_count path references"
+                        _log_debug "Would remove: $session_file"
+                        return 0
+                    fi
+                    
+                    # === TRANSACTION START ===
+                    _log_info "=== Executing Extraction ==="
+                    
+                    # Create target project if needed
+                    if [[ ! -d "$target_project" ]]; then
+                        _log_info "Creating target project directory..."
+                        if ! mkdir -p "$target_project"; then
+                            _log_error "Failed to create target project: $target_project"
+                            return 1
+                        fi
+                    fi
+                    
+                    # Copy and transform session
+                    _log_info "Copying session to target..."
+                    if ! cp "$session_file" "${session_file}.extract-backup"; then
+                        _log_error "Failed to backup session"
+                        return 1
+                    fi
+                    
+                    if ! cp "$session_file" "$target_session"; then
+                        _log_error "Failed to copy session"
+                        rm -f "${session_file}.extract-backup"
+                        return 1
+                    fi
+                    
+                    # Update paths in target
+                    if [[ "$ref_count" -gt 0 ]]; then
+                        _log_info "Updating $ref_count path references..."
+                        local old_esc new_esc
+                        old_esc=$(printf '%s' "$source_dir" | sed -e 's/[\/&]/\\&/g')
+                        new_esc=$(printf '%s' "$target_dir" | sed -e 's/[\/&]/\\&/g')
+                        
+                        if [[ "$OSTYPE" == "darwin"* ]]; then
+                            sed -i '' "s|\"cwd\":\"$old_esc\"|\"cwd\":\"$new_esc\"|g" "$target_session"
+                        else
+                            sed -i "s|\"cwd\":\"$old_esc\"|\"cwd\":\"$new_esc\"|g" "$target_session"
+                        fi
+                        
+                        # Verify update
+                        local updated_count
+                        updated_count=$(grep -c "\"cwd\":\"$target_dir\"" "$target_session" 2>/dev/null || echo 0)
+                        
+                        if [[ "$updated_count" -ne "$ref_count" ]]; then
+                            _log_warn "Path update mismatch: expected $ref_count, got $updated_count"
+                        else
+                            _log_success "Successfully updated all path references"
+                        fi
+                    fi
+                    
+                    # Remove from source
+                    _log_info "Removing session from source..."
+                    if ! rm "$session_file"; then
+                        _log_error "Failed to remove source session"
+                        _log_info "Manual cleanup required: $session_file"
+                    else
+                        rm -f "${session_file}.extract-backup"
+                    fi
+                    
+                    # === TRANSACTION END ===
+                    
+                    _log_success "=== Extraction Complete ==="
+                    _log_info "Session $uuid moved from:"
+                    _log_info "  $source_dir"  
+                    _log_info "to:"
+                    _log_info "  $target_dir"
+                    
+                    # Report final state
+                    local remaining_sessions
+                    remaining_sessions=$(find "$source_project" -name "*.jsonl" -type f | wc -l)
+                    _log_info "Source project has $remaining_sessions sessions remaining"
+                    
+                    if [[ "$remaining_sessions" -eq 0 ]]; then
+                        _log_info "Source project is now empty - consider removing it"
+                    fi
+                    ;;
+                    
+                *)
+                    _log_info "Usage: cm organize <subcommand>"
+                    _log_info ""
+                    _log_info "Subcommands:"
+                    _log_info "  extract <uuid> --from <source> --to <target>"
+                    _log_info "    Extract single session by UUID to another directory"
+                    _log_info ""
+                    _log_info "Aliases: extract -> e"
+                    _log_info ""
+                    _log_info "Future subcommands (not yet implemented):"
+                    _log_info "  filter <criteria> --from <source> --to <target>"
+                    _log_info "  split <source> --by <date|size|pattern>"
+                    _log_info "  merge <source1> <source2> --to <target>"
+                    ;;
+            esac
+            ;;
+            
         "health"|"doctor")
             # System health check
             _log_info "=== Claude Manager Health Check ==="
@@ -1300,6 +1572,11 @@ claude_manager() {
             echo ""
             echo "  move <old_path> <new_path>"
             echo "    Robust move with edge case handling, pre-flight checks, and rollback"
+            echo ""
+            echo "  organize <subcommand>"
+            echo "    Granular session organization:"
+            echo "    • extract <uuid> --from <source> --to <target>"
+            echo "      Extract single session by UUID to another directory"
             echo ""
             echo "  full [new_path]"
             echo "    Interactive helper - run from source directory to move"
