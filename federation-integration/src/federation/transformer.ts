@@ -10,6 +10,9 @@ import type {
   ThreadMetadata,
   ThreadContext,
   Block,
+} from '../types.js';
+
+import {
   Priority,
   ComplexityLevel,
   ConversationIntent,

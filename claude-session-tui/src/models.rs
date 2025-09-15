@@ -1,10 +1,10 @@
 //! Core data models for Claude session parsing with comprehensive type safety
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Main session container with complete metadata and conversation history
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -604,18 +604,21 @@ impl Session {
     fn update_statistics(&mut self) {
         self.statistics.total_blocks = self.blocks.len();
         self.statistics.user_blocks = self.blocks.iter().filter(|b| b.role == Role::User).count();
-        self.statistics.assistant_blocks = self.blocks.iter().filter(|b| b.role == Role::Assistant).count();
+        self.statistics.assistant_blocks = self
+            .blocks
+            .iter()
+            .filter(|b| b.role == Role::Assistant)
+            .count();
         self.statistics.tool_blocks = self.blocks.iter().filter(|b| b.role == Role::Tool).count();
-        
-        self.statistics.total_words = self.blocks.iter()
-            .map(|b| b.content.word_count)
-            .sum();
-        
-        self.statistics.total_characters = self.blocks.iter()
-            .map(|b| b.content.character_count)
-            .sum();
-        
-        self.statistics.code_blocks = self.blocks.iter()
+
+        self.statistics.total_words = self.blocks.iter().map(|b| b.content.word_count).sum();
+
+        self.statistics.total_characters =
+            self.blocks.iter().map(|b| b.content.character_count).sum();
+
+        self.statistics.code_blocks = self
+            .blocks
+            .iter()
             .map(|b| b.content.code_blocks.len())
             .sum();
     }
@@ -630,10 +633,10 @@ impl Session {
         if self.blocks.is_empty() {
             return None;
         }
-        
+
         let first_timestamp = self.blocks.first()?.timestamp;
         let last_timestamp = self.blocks.last()?.timestamp;
-        
+
         Some(last_timestamp - first_timestamp)
     }
 }

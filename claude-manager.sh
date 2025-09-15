@@ -10,6 +10,7 @@ export CLAUDE_DIR="$HOME/.claude"
 export BACKUP_STRATEGY="${CLAUDE_BACKUP_STRATEGY:-file}"  # file or project
 export INTERACTIVE="${CLAUDE_INTERACTIVE:-true}"
 export DRY_RUN="${CLAUDE_DRY_RUN:-false}"
+export UNDO_FILE="$CLAUDE_DIR/.last_move_operation"
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,6 +32,67 @@ _log_warn() { _log "WARN" "$1" "$YELLOW"; }
 _log_error() { _log "ERROR" "$1" "$RED"; }
 _log_success() { _log "SUCCESS" "$1" "$GREEN"; }
 _log_debug() { _log "DEBUG" "$1" "$PURPLE"; }
+
+# Save undo information
+_save_undo_info() {
+    local operation="$1"
+    shift
+    echo "$(date '+%Y-%m-%d %H:%M:%S')|$operation|$*" > "$UNDO_FILE"
+    _log_info "Undo information saved to $UNDO_FILE"
+}
+
+# Perform undo of last operation
+_undo_last_operation() {
+    if [[ ! -f "$UNDO_FILE" ]]; then
+        _log_error "No undo information found"
+        return 1
+    fi
+    
+    local undo_info
+    undo_info=$(cat "$UNDO_FILE")
+    IFS='|' read -r timestamp operation args <<< "$undo_info"
+    
+    _log_info "Last operation: $operation at $timestamp"
+    _log_info "Arguments: $args"
+    
+    case "$operation" in
+        "move")
+            IFS=' ' read -r old_path new_path from_project to_project <<< "$args"
+            _log_info "Undoing move operation..."
+            
+            # Handle simple directory move (no project)
+            if [[ "$from_project" == "none" ]]; then
+                if [[ -d "$new_path" ]]; then
+                    mv "$new_path" "$old_path"
+                    _log_success "Restored directory: $new_path -> $old_path"
+                else
+                    _log_warn "Directory not found: $new_path"
+                fi
+            else
+                # Reverse the operations in opposite order
+                if [[ -d "$to_project" ]]; then
+                    mv "$to_project" "$from_project"
+                    _log_success "Restored project: $to_project -> $from_project"
+                fi
+                
+                if [[ -d "$new_path" ]]; then
+                    mv "$new_path" "$old_path"
+                    _log_success "Restored source: $new_path -> $old_path"
+                fi
+                
+                # Re-migrate sessions back
+                _migrate_project "$new_path" "$old_path" "$from_project"
+            fi
+            
+            rm -f "$UNDO_FILE"
+            _log_success "Undo completed successfully"
+            ;;
+        *)
+            _log_error "Unknown operation: $operation"
+            return 1
+            ;;
+    esac
+}
 
 # Confirmation prompts
 _confirm() {
@@ -468,11 +530,28 @@ _find_projects_by_session_path() {
     local source_path="$1"
     local matches=()
 
-    while IFS= read -r project; do
-        if find "$project" -name "*.jsonl" -type f -exec grep -q "\"cwd\":\"$source_path\"" {} \; 2>/dev/null; then
-            matches+=("$project")
-        fi
-    done < <(_find_claude_projects)
+    # Faster approach: limit search time and results
+    local temp_matches
+    # Use timeout to prevent hanging on large searches
+    temp_matches=$(timeout 3 find "$CLAUDE_DIR/projects" -name "*.jsonl" -type f -exec grep -l "\"cwd\":\"$source_path\"" {} \; 2>/dev/null | head -5 || true)
+    
+    if [[ -n "$temp_matches" ]]; then
+        while IFS= read -r session_file; do
+            local project_dir
+            project_dir=$(dirname "$session_file")
+            # Add project if not already in matches
+            local already_added=false
+            for m in "${matches[@]}"; do
+                if [[ "$m" == "$project_dir" ]]; then
+                    already_added=true
+                    break
+                fi
+            done
+            if [[ "$already_added" == "false" ]]; then
+                matches+=("$project_dir")
+            fi
+        done <<< "$temp_matches"
+    fi
 
     for m in "${matches[@]}"; do
         echo "$m"
@@ -482,7 +561,12 @@ _find_projects_by_session_path() {
 # Suggest a Claude project directory path for a given new source path
 _suggest_project_dir_for() {
     local new_path="$1"
-    echo "$CLAUDE_DIR/projects/$(basename "$new_path")"
+    
+    # Convert absolute path to Claude Code project naming convention
+    # Example: /Users/tryk/nabia/chats/auras/senku2 -> -Users-tryk-nabia-chats-auras-senku2
+    local encoded_name
+    encoded_name=$(echo "$new_path" | sed 's|^/||' | sed 's|/|-|g')
+    echo "$CLAUDE_DIR/projects/-${encoded_name}"
 }
 
 # Main CLI function
@@ -526,41 +610,13 @@ claude_manager() {
             ;;
 
         "move"|"mv")
-            # Move both source code directory and Claude project, and update session paths
-            local old_path="$2"
-            local new_path="$3"
-            local from_project="$4"
-            local to_project="$5"
-
-            if [[ -z "$old_path" || -z "$new_path" ]]; then
-                if [[ "$INTERACTIVE" == "true" ]]; then
-                    if [[ -z "$from_project" ]]; then
-                        _log_info "Select source project:"
-                        from_project=$(_select_project)
-                        [[ $? -ne 0 ]] && return 1
-                    fi
-                    if [[ -z "$old_path" ]]; then
-                        old_path=$(_auto_detect_migration "$from_project")
-                        [[ $? -ne 0 ]] && return 1
-                    fi
-                    if [[ -z "$new_path" ]]; then
-                        printf "Enter new source path: "
-                        read -r new_path
-                    fi
-                    if [[ -z "$to_project" ]]; then
-                        printf "Enter destination project path: "
-                        read -r to_project
-                    fi
-                else
-                    echo "Usage: claude_manager move <old_path> <new_path> <from_project> <to_project>"
-                    return 1
-                fi
-            fi
-
-            _log_info "=== Moving source and project ==="
-            _move_src_dir "$old_path" "$new_path"
-            _migrate_project "$old_path" "$new_path" "$from_project"
-            _move_project_dir "$from_project" "$to_project"
+            # Move command with safety features
+            _log_info "=== Move Operation ==="
+            _log_info "This will move both source directory and Claude project"
+            
+            # Use the full interactive flow that has all the safety checks
+            # Pass the arguments to the full command
+            claude_manager full "$2" "$3"
             ;;
 
         "full"|"f")
@@ -600,8 +656,32 @@ claude_manager() {
             done < <(_find_projects_by_session_path "$old_path")
 
             if [[ ${#project_candidates[@]} -eq 0 ]]; then
-                _log_error "No Claude projects reference: $old_path"
-                return 1
+                _log_warn "No Claude projects directly reference: $old_path"
+                _log_info "This appears to be a subdirectory without its own Claude project"
+                
+                # Option to just move the directory without updating sessions
+                if _confirm "Move directory without updating Claude sessions?"; then
+                    _log_info "=== Simple directory move ==="
+                    if [[ ! -d "$old_path" ]]; then
+                        _log_error "Directory not found: $old_path"
+                        return 1
+                    fi
+                    
+                    _save_undo_info "move" "$old_path" "$new_path" "none" "none"
+                    
+                    if mv "$old_path" "$new_path"; then
+                        _log_success "Moved directory: $old_path -> $new_path"
+                        _log_info "Note: No Claude sessions were updated"
+                        return 0
+                    else
+                        _log_error "Failed to move directory"
+                        rm -f "$UNDO_FILE"
+                        return 1
+                    fi
+                else
+                    _log_info "Cancelled - no directory was moved"
+                    return 1
+                fi
             elif [[ ${#project_candidates[@]} -eq 1 ]]; \
                  then selected_project="${project_candidates[0]}"
                  _log_info "Detected project: $(basename "$selected_project")"
@@ -640,9 +720,54 @@ claude_manager() {
                 return 1
             fi
 
-            _move_src_dir "$old_path" "$new_path"
-            _migrate_project "$old_path" "$new_path" "$selected_project"
-            _move_project_dir "$selected_project" "$to_project"
+            # First validate we can update sessions before moving anything
+            _log_info "=== Pre-flight validation ==="
+            local session_count=0
+            while IFS= read -r session; do
+                if grep -q "$old_path" "$session" 2>/dev/null; then
+                    ((session_count++))
+                fi
+            done < <(_find_project_sessions "$selected_project")
+            
+            if [[ $session_count -eq 0 ]]; then
+                _log_warn "No sessions found with path: $old_path"
+                if ! _confirm "Continue anyway?"; then
+                    _log_warn "Cancelled"
+                    return 1
+                fi
+            else
+                _log_success "Found $session_count sessions to update"
+            fi
+            
+            # Save undo information before making changes
+            _save_undo_info "move" "$old_path" "$new_path" "$selected_project" "$to_project"
+            
+            # Now perform operations in safe order:
+            # 1. Update sessions first (while paths still exist)
+            if ! _migrate_project "$old_path" "$new_path" "$selected_project"; then
+                _log_error "Failed to migrate sessions - aborting move"
+                rm -f "$UNDO_FILE"
+                return 1
+            fi
+            
+            # 2. Move source directory
+            if ! _move_src_dir "$old_path" "$new_path"; then
+                _log_error "Failed to move source directory - rolling back"
+                _migrate_project "$new_path" "$old_path" "$selected_project"
+                rm -f "$UNDO_FILE"
+                return 1
+            fi
+            
+            # 3. Move project directory
+            if ! _move_project_dir "$selected_project" "$to_project"; then
+                _log_error "Failed to move project directory - rolling back"
+                _move_src_dir "$new_path" "$old_path"
+                _migrate_project "$new_path" "$old_path" "$selected_project"
+                rm -f "$UNDO_FILE"
+                return 1
+            fi
+            
+            _log_success "Move completed successfully. Use 'cm undo' to revert if needed."
             ;;
 
         "list"|"ls"|"l")
@@ -662,6 +787,10 @@ claude_manager() {
             fi
             ;;
 
+        "undo")
+            _undo_last_operation
+            ;;
+            
         "config"|"cfg")
             _log_info "Current configuration:"
             echo "  CLAUDE_DIR: $CLAUDE_DIR"
@@ -688,6 +817,9 @@ claude_manager() {
             echo ""
             echo "  config"
             echo "    Display current configuration values"
+            echo ""
+            echo "  undo"
+            echo "    Undo the last move operation"
             echo ""
             echo "Aliases: cm, cm-migrate, cm-move, cm-full, cm-list"
             echo ""
@@ -716,3 +848,8 @@ alias cm-migrate='claude_manager migrate'
 alias cm-move='claude_manager move'
 alias cm-full='claude_manager full'
 alias cm-list='claude_manager list'
+
+# Execute main function if script is run directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    claude_manager "$@"
+fi

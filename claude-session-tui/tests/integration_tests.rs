@@ -115,20 +115,26 @@ async fn test_realistic_session_parsing() {
     assert_eq!(session.statistics.assistant_blocks, 3);
 
     // Check that code blocks were extracted
-    let total_code_blocks: usize = session.blocks.iter()
+    let total_code_blocks: usize = session
+        .blocks
+        .iter()
         .map(|b| b.content.code_blocks.len())
         .sum();
     assert!(total_code_blocks >= 3);
 
     // Check for Rust language detection
-    let rust_blocks = session.blocks.iter()
+    let rust_blocks = session
+        .blocks
+        .iter()
         .flat_map(|b| &b.content.code_blocks)
         .filter(|cb| cb.language == Some(ProgrammingLanguage::Rust))
         .count();
     assert!(rust_blocks >= 3);
 
     // Check for file path mentions
-    let file_mentions = session.blocks.iter()
+    let file_mentions = session
+        .blocks
+        .iter()
         .flat_map(|b| &b.content.mentions)
         .filter(|m| m.mention_type == MentionType::File)
         .count();
@@ -145,7 +151,9 @@ async fn test_tool_usage_session() {
     let session = parser.parse_file(temp_file.path()).await.unwrap();
 
     // Check for tool role blocks
-    let tool_blocks = session.blocks.iter()
+    let tool_blocks = session
+        .blocks
+        .iter()
         .filter(|b| b.role == Role::Tool)
         .count();
     assert!(tool_blocks >= 1);
@@ -164,9 +172,13 @@ async fn test_debugging_session_patterns() {
     let session = parser.parse_file(temp_file.path()).await.unwrap();
 
     // Should detect error patterns
-    let error_mentions = session.blocks.iter()
-        .filter(|b| b.content.raw_text.to_lowercase().contains("panic") 
-            || b.content.raw_text.to_lowercase().contains("error"))
+    let error_mentions = session
+        .blocks
+        .iter()
+        .filter(|b| {
+            b.content.raw_text.to_lowercase().contains("panic")
+                || b.content.raw_text.to_lowercase().contains("error")
+        })
         .count();
     assert!(error_mentions >= 1);
 }
@@ -185,13 +197,20 @@ async fn test_comprehensive_insights_analysis() {
     assert!(!session.insights.conversation_flow.phases.is_empty());
 
     // Check for Rust-related topics
-    let rust_topics = session.insights.primary_topics.iter()
+    let rust_topics = session
+        .insights
+        .primary_topics
+        .iter()
         .filter(|t| t.name.to_lowercase().contains("rust"))
         .count();
     assert!(rust_topics >= 1);
 
     // Check conversation flow phases
-    let implementation_phases = session.insights.conversation_flow.phases.iter()
+    let implementation_phases = session
+        .insights
+        .conversation_flow
+        .phases
+        .iter()
         .filter(|p| p.phase_type == PhaseType::Implementation)
         .count();
     assert!(implementation_phases >= 1);
@@ -211,7 +230,9 @@ async fn test_batch_parsing_with_errors() {
     // Create file with malformed JSON
     let malformed_content = "invalid json line\n{\"role\":\"user\",\"content\":\"valid\",\"timestamp\":\"2023-01-01T00:00:00Z\"}\n";
     let malformed_file = temp_dir.path().join("malformed.jsonl");
-    tokio::fs::write(&malformed_file, malformed_content).await.unwrap();
+    tokio::fs::write(&malformed_file, malformed_content)
+        .await
+        .unwrap();
     file_paths.push(malformed_file);
 
     let api = ClaudeSessionApi::new();
@@ -310,16 +331,25 @@ async fn test_export_functionality() {
     let sessions = vec![session];
 
     // Test JSON export
-    let json_export = api.export_sessions(&sessions, ExportFormat::Json).await.unwrap();
+    let json_export = api
+        .export_sessions(&sessions, ExportFormat::Json)
+        .await
+        .unwrap();
     assert!(json_export.contains("\"role\":"));
     assert!(serde_json::from_str::<serde_json::Value>(&json_export).is_ok());
 
     // Test CSV export
-    let csv_export = api.export_sessions(&sessions, ExportFormat::Csv).await.unwrap();
+    let csv_export = api
+        .export_sessions(&sessions, ExportFormat::Csv)
+        .await
+        .unwrap();
     assert!(csv_export.contains("id,file_path,created_at"));
 
     // Test Markdown export
-    let markdown_export = api.export_sessions(&sessions, ExportFormat::Markdown).await.unwrap();
+    let markdown_export = api
+        .export_sessions(&sessions, ExportFormat::Markdown)
+        .await
+        .unwrap();
     assert!(markdown_export.contains("# Claude Sessions Analysis"));
     assert!(markdown_export.contains("## Session:"));
 }
@@ -353,7 +383,7 @@ async fn test_caching_performance() {
 #[tokio::test]
 async fn test_performance_threshold_monitoring() {
     let mut large_content = String::new();
-    
+
     // Create a large session to test performance monitoring
     for i in 0..10000 {
         let timestamp = chrono::Utc::now() - chrono::Duration::seconds(i);
@@ -364,7 +394,9 @@ async fn test_performance_threshold_monitoring() {
     }
 
     let temp_file = NamedTempFile::new().unwrap();
-    tokio::fs::write(temp_file.path(), large_content).await.unwrap();
+    tokio::fs::write(temp_file.path(), large_content)
+        .await
+        .unwrap();
 
     // Parser with very low performance threshold
     let parser = SessionParser::with_config(
@@ -384,7 +416,7 @@ async fn test_performance_threshold_monitoring() {
             tokenize_content: true,
             analyze_sentiment: false,
             detect_programming_languages: true,
-        }
+        },
     );
 
     let session = parser.parse_file(temp_file.path()).await.unwrap();
@@ -396,7 +428,7 @@ async fn test_performance_threshold_monitoring() {
 fn test_data_model_serialization() {
     let mut session = Session::new();
     session.metadata.file_path = "test.jsonl".to_string();
-    
+
     let block = Block {
         id: Uuid::new_v4(),
         sequence_number: 1,
@@ -448,46 +480,64 @@ fn test_data_model_serialization() {
 async fn test_error_recovery_patterns() {
     // Create content with various error patterns
     let mut error_content = String::new();
-    
+
     // Valid JSON line
     error_content.push_str("{\"role\":\"user\",\"content\":\"Valid message\",\"timestamp\":\"2023-01-01T00:00:00Z\"}\n");
-    
+
     // Malformed JSON (missing closing brace)
-    error_content.push_str("{\"role\":\"user\",\"content\":\"Malformed\",\"timestamp\":\"2023-01-01T00:00:00Z\"\n");
-    
+    error_content.push_str(
+        "{\"role\":\"user\",\"content\":\"Malformed\",\"timestamp\":\"2023-01-01T00:00:00Z\"\n",
+    );
+
     // Invalid role
     error_content.push_str("{\"role\":\"invalid_role\",\"content\":\"Invalid role\",\"timestamp\":\"2023-01-01T00:00:00Z\"}\n");
-    
+
     // Missing required field
     error_content.push_str("{\"role\":\"user\",\"timestamp\":\"2023-01-01T00:00:00Z\"}\n");
-    
+
     // Invalid timestamp
-    error_content.push_str("{\"role\":\"user\",\"content\":\"Invalid timestamp\",\"timestamp\":\"invalid-date\"}\n");
-    
+    error_content.push_str(
+        "{\"role\":\"user\",\"content\":\"Invalid timestamp\",\"timestamp\":\"invalid-date\"}\n",
+    );
+
     // Another valid line
     error_content.push_str("{\"role\":\"assistant\",\"content\":\"Another valid message\",\"timestamp\":\"2023-01-01T01:00:00Z\"}\n");
 
     let temp_file = NamedTempFile::new().unwrap();
-    tokio::fs::write(temp_file.path(), error_content).await.unwrap();
+    tokio::fs::write(temp_file.path(), error_content)
+        .await
+        .unwrap();
 
     let parser = SessionParser::new(); // Uses error recovery by default
     let session = parser.parse_file(temp_file.path()).await.unwrap();
 
     // Should successfully parse valid lines while skipping malformed ones
     assert!(session.blocks.len() >= 2);
-    assert!(session.blocks.iter().all(|b| matches!(b.role, Role::User | Role::Assistant)));
+    assert!(session
+        .blocks
+        .iter()
+        .all(|b| matches!(b.role, Role::User | Role::Assistant)));
 }
 
 #[ignore] // Testing private method - disabled
 #[test]
 fn test_programming_language_detection() {
     let extractor = BlockExtractor::new();
-    
+
     // Test various programming languages
     let test_cases = [
-        ("fn main() { println!(\"Hello\"); }", Some(ProgrammingLanguage::Rust)),
-        ("def hello():\n    print(\"Hello\")", Some(ProgrammingLanguage::Python)),
-        ("function hello() { console.log(\"Hello\"); }", Some(ProgrammingLanguage::JavaScript)),
+        (
+            "fn main() { println!(\"Hello\"); }",
+            Some(ProgrammingLanguage::Rust),
+        ),
+        (
+            "def hello():\n    print(\"Hello\")",
+            Some(ProgrammingLanguage::Python),
+        ),
+        (
+            "function hello() { console.log(\"Hello\"); }",
+            Some(ProgrammingLanguage::JavaScript),
+        ),
         ("SELECT * FROM users", Some(ProgrammingLanguage::SQL)),
         ("<div>Hello</div>", Some(ProgrammingLanguage::HTML)),
         ("body { color: red; }", Some(ProgrammingLanguage::CSS)),
@@ -505,17 +555,21 @@ fn test_programming_language_detection() {
 fn test_content_tokenization() {
     let mut extractor = BlockExtractor::new();
     let text = "Check the file /src/main.rs and run `cargo test` command.";
-    
+
     let content = extractor.extract_block_content(text).unwrap();
-    
+
     // Should extract file path
-    let file_mentions: Vec<_> = content.mentions.iter()
+    let file_mentions: Vec<_> = content
+        .mentions
+        .iter()
         .filter(|m| m.mention_type == MentionType::File)
         .collect();
     assert!(file_mentions.len() >= 1);
-    
+
     // Should extract command
-    let command_mentions: Vec<_> = content.mentions.iter()
+    let command_mentions: Vec<_> = content
+        .mentions
+        .iter()
         .filter(|m| m.mention_type == MentionType::Command)
         .collect();
     assert!(command_mentions.len() >= 1);
@@ -525,20 +579,20 @@ fn test_content_tokenization() {
     assert!(content.word_count > 0);
 }
 
-#[ignore] // Testing private method - disabled  
+#[ignore] // Testing private method - disabled
 #[test]
 fn test_complex_conversation_flow() {
     // This test would be expanded with actual conversation flow analysis
     // For now, testing basic phase detection
     let analyzer = InsightsAnalyzer::new();
-    
+
     // Disabled: Testing private method
     // let planning_content = "Let's plan the architecture for this system";
     // assert_eq!(analyzer.detect_conversation_phase(planning_content), PhaseType::Planning);
-    
+
     // let implementation_content = "Now let's implement the main function";
     // assert_eq!(analyzer.detect_conversation_phase(implementation_content), PhaseType::Implementation);
-    
+
     // let debugging_content = "I'm getting an error, let's debug this issue";
     // assert_eq!(analyzer.detect_conversation_phase(debugging_content), PhaseType::Debugging);
 }

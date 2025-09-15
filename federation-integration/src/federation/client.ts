@@ -10,13 +10,16 @@ import type {
   ThreadMetadata,
   ThreadContext,
   ThreadAssignment,
+  Task,
+  Marker,
+  Insight,
+} from '../types.js';
+
+import {
   AgentRole,
   Priority,
   ComplexityLevel,
   AssignmentStatus,
-  Task,
-  Marker,
-  Insight,
 } from '../types.js';
 import { AgentSelector } from './agent_selector.js';
 import { ThreadTransformer } from './transformer.js';

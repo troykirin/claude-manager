@@ -44,7 +44,9 @@ pub enum ClaudeSessionError {
     #[error("Multiple parsing errors: {count} failures")]
     MultipleParsing { count: usize },
 
-    #[error("Performance threshold exceeded: {operation} took {duration_ms}ms (limit: {limit_ms}ms)")]
+    #[error(
+        "Performance threshold exceeded: {operation} took {duration_ms}ms (limit: {limit_ms}ms)"
+    )]
     PerformanceThreshold {
         operation: String,
         duration_ms: u64,
@@ -221,10 +223,9 @@ impl PerformanceStats {
         if self.total_duration_ms > 0 {
             let duration_sec = self.total_duration_ms as f64 / 1000.0;
             self.throughput_files_per_sec = self.files_processed as f64 / duration_sec;
-            self.throughput_mb_per_sec =
-                (self.bytes_processed as f64 / 1_048_576.0) / duration_sec;
+            self.throughput_mb_per_sec = (self.bytes_processed as f64 / 1_048_576.0) / duration_sec;
         }
-        
+
         if self.files_processed > 0 {
             self.average_file_time_ms = self.total_duration_ms as f64 / self.files_processed as f64;
         }

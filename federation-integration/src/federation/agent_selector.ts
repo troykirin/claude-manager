@@ -5,6 +5,9 @@
 
 import type {
   Block,
+} from '../types.js';
+
+import {
   AgentRole,
   ConversationIntent,
   PhaseType,
