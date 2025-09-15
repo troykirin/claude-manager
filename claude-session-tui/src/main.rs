@@ -16,9 +16,10 @@ enum Msg {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize logging
+    // Initialize logging once (ignore if already set)
+    let _ = tracing_subscriber::fmt().try_init();
+    // Library init logs a startup message, but does not set a subscriber
     claude_session_tui::init()?;
-    tracing_subscriber::fmt().init();
 
     // Setup terminal guard for proper cleanup
     let mut guard = TerminalGuard::new()?;

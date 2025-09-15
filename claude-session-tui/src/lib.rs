@@ -25,7 +25,6 @@ use tracing::info;
 
 /// Initialize the Claude session parser with logging
 pub fn init() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
     info!("Claude Session TUI parser initialized");
     Ok(())
 }

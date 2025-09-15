@@ -24,18 +24,7 @@ struct ExtractionPatterns {
     command: Regex,
     function_call: Regex,
     variable: Regex,
-    error_message: Regex,
-    import_statement: Regex,
-    class_definition: Regex,
-    method_definition: Regex,
-    markdown_header: Regex,
     markdown_link: Regex,
-    email: Regex,
-    phone: Regex,
-    ip_address: Regex,
-    version_number: Regex,
-    git_commit: Regex,
-    timestamp: Regex,
 }
 
 /// Statistics for extraction operations
@@ -650,18 +639,7 @@ impl ExtractionPatterns {
             command: Regex::new(r"(?:^|\s)(\$|>|\#)\s*([^\r\n]+)")?,
             function_call: Regex::new(r"(\w+)\s*\([^)]*\)")?,
             variable: Regex::new(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")?,
-            error_message: Regex::new(r"(?i)error|exception|failed|panic")?,
-            import_statement: Regex::new(r"(?:import|use|from|include)\s+[\w.]+")?,
-            class_definition: Regex::new(r"(?:class|struct|interface|enum)\s+(\w+)")?,
-            method_definition: Regex::new(r"(?:def|fn|function|method)\s+(\w+)")?,
-            markdown_header: Regex::new(r"^#+\s+(.+)$")?,
             markdown_link: Regex::new(r"\[([^\]]+)\]\(([^)]+)\)")?,
-            email: Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")?,
-            phone: Regex::new(r"\b\d{3}-\d{3}-\d{4}\b")?,
-            ip_address: Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")?,
-            version_number: Regex::new(r"\b\d+\.\d+\.\d+\b")?,
-            git_commit: Regex::new(r"\b[a-f0-9]{7,40}\b")?,
-            timestamp: Regex::new(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")?,
         })
     }
 }
