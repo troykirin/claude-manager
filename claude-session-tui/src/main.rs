@@ -1,68 +1,114 @@
+use crossterm::event::{self, Event, KeyEventKind};
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 use std::io;
-use std::path::PathBuf;
+use std::sync::mpsc;
 use std::time::Duration;
-
-use crossterm::{
-    event::{self, Event, KeyEvent},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use ratatui::{prelude::CrosstermBackend, Terminal};
+use tokio::time;
 
 use claude_session_tui::ui::App;
 
+#[derive(Debug, Clone)]
+enum Msg {
+    Key(crossterm::event::KeyEvent),
+    Tick,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize logging and any global state
+    // Initialize logging
     claude_session_tui::init()?;
+    tracing_subscriber::fmt().init();
 
-    // Determine sessions directory (arg1 or default to ./demo_sessions)
-    let sessions_dir = std::env::args()
-        .nth(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("demo_sessions"));
+    // Setup terminal guard for proper cleanup
+    let mut guard = TerminalGuard::new()?;
+    let mut app = App::new().unwrap();
 
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // Create app and load sessions
-    let mut app = App::new()?;
-    if let Err(err) = app.load_sessions(sessions_dir).await {
+    // Load sessions asynchronously with error handling
+    if let Err(err) = app.load_sessions("demo_sessions".into()).await {
         app.set_error(format!("Failed to load sessions: {}", err));
     }
 
-    // Main loop
-    loop {
-        terminal.draw(|f| app.render(f))?;
+    // Message bus
+    let (tx, rx) = mpsc::channel::<Msg>();
 
-        // Non-blocking event poll with small timeout
-        if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                handle_key_event(&mut app, key)?;
+    // Keyboard task
+    let tx_keys = tx.clone();
+    tokio::spawn(async move {
+        loop {
+            // Poll for responsiveness without busy waiting
+            if event::poll(Duration::from_millis(50)).unwrap_or(false) {
+                if let Ok(ev) = event::read() {
+                    if let Event::Key(k) = ev {
+                        let _ = tx_keys.send(Msg::Key(k));
+                        if k.kind == KeyEventKind::Press {
+                            if let crossterm::event::KeyCode::Char('q')
+                            | crossterm::event::KeyCode::Esc = k.code
+                            {
+                                // Soft attempt to also send Quit, but main loop will interpret 'q' anyway
+                            }
+                        }
+                    }
+                }
             }
         }
+    });
 
-        // Update application state
-        app.update();
-
-        if app.should_quit() {
-            break;
+    // Tick task for periodic updates
+    let tx_tick = tx.clone();
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_millis(250));
+        loop {
+            interval.tick().await;
+            let _ = tx_tick.send(Msg::Tick);
         }
-    }
+    });
 
-    // Restore terminal
-    disable_raw_mode()?;
-    // It's safe to unwrap here as we're cleaning up
-    execute!(terminal.backend_mut(), LeaveAlternateScreen).ok();
-    terminal.show_cursor().ok();
+    // UI loop: receive -> update -> draw
+    while !app.should_quit() {
+        if let Ok(msg) = rx.try_recv() {
+            match msg {
+                Msg::Key(k) => {
+                    app.handle_key_event(k)?;
+                }
+                Msg::Tick => {
+                    app.update();
+                }
+            }
+        }
+        guard.terminal.draw(|f| app.render(f))?;
+        tokio::time::sleep(Duration::from_millis(16)).await; // ~60 FPS
+    }
 
     Ok(())
 }
 
-fn handle_key_event(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
-    app.handle_key_event(key)
+// Terminal guard for proper setup/cleanup (similar to ratatui starter)
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+
+struct TerminalGuard {
+    terminal: Terminal<CrosstermBackend<io::Stdout>>,
+}
+
+impl TerminalGuard {
+    fn new() -> anyhow::Result<Self> {
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let backend = CrosstermBackend::new(stdout);
+        let terminal = Terminal::new(backend)?;
+        Ok(Self { terminal })
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let mut stdout = io::stdout();
+        let _ = execute!(stdout, LeaveAlternateScreen, DisableMouseCapture);
+    }
 }
