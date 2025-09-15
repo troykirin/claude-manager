@@ -66,4 +66,3 @@ async fn main() -> anyhow::Result<()> {
 fn handle_key_event(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
     app.handle_key_event(key)
 }
-
