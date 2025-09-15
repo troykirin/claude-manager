@@ -610,12 +610,311 @@ claude_manager() {
             ;;
 
         "move"|"mv")
-            # Move command with safety features
+            # Hardened move flow with comprehensive edge case handling
+            local old_path="$2"
+            local new_path="$3"
+
+            if [[ -n "$old_path" && -n "$new_path" ]]; then
+                _log_info "=== Move Operation (hardened) ==="
+                
+                # ========== INPUT NORMALIZATION & VALIDATION ==========
+                _log_debug "Normalizing and validating input paths..."
+                
+                # Resolve to absolute paths
+                if command -v realpath >/dev/null 2>&1 && realpath -m /tmp >/dev/null 2>&1; then
+                    # GNU realpath with -m support
+                    old_path=$(realpath "$old_path" 2>/dev/null) || {
+                        _log_error "Invalid old_path: $2"
+                        return 1
+                    }
+                    new_path=$(realpath -m "$new_path" 2>/dev/null) || {
+                        _log_error "Invalid new_path: $3"
+                        return 1
+                    }
+                else
+                    # Fallback path resolution (macOS realpath or no realpath)
+                    if command -v realpath >/dev/null 2>&1; then
+                        # macOS realpath (existing paths only)
+                        old_path=$(realpath "$old_path" 2>/dev/null) || {
+                            _log_error "Invalid old_path: $2"
+                            return 1
+                        }
+                        new_path=$(_resolve_absolute_path "$(pwd)" "$new_path")
+                    else
+                        # No realpath available
+                        old_path=$(_resolve_absolute_path "$(pwd)" "$old_path")
+                        new_path=$(_resolve_absolute_path "$(pwd)" "$new_path")
+                    fi
+                fi
+                
+                # Normalize paths - remove trailing slashes for consistency
+                old_path="${old_path%/}"
+                new_path="${new_path%/}"
+                
+                # Basic path validation
+                if [[ "$old_path" == "$new_path" ]]; then
+                    _log_error "Source and destination paths are identical: $old_path"
+                    return 1
+                fi
+                
+                # Check for nesting (moving into itself)
+                if [[ "$new_path" == "$old_path"/* ]]; then
+                    _log_error "Cannot move directory into itself: $old_path -> $new_path"
+                    return 1
+                fi
+                
+                # ========== PRE-FLIGHT CHECKS ==========
+                _log_debug "Performing pre-flight validation..."
+                
+                # Verify source exists and is a directory
+                if [[ ! -e "$old_path" ]]; then
+                    _log_error "Source path does not exist: $old_path"
+                    return 1
+                fi
+                
+                if [[ ! -d "$old_path" ]]; then
+                    _log_error "Source path is not a directory: $old_path"
+                    return 1
+                fi
+                
+                # Check if source is readable
+                if [[ ! -r "$old_path" ]]; then
+                    _log_error "Source directory is not readable: $old_path"
+                    return 1
+                fi
+                
+                # Handle destination existence
+                if [[ -e "$new_path" ]]; then
+                    if [[ ! -d "$new_path" ]]; then
+                        _log_error "Destination exists but is not a directory: $new_path"
+                        return 1
+                    fi
+                    
+                    local dest_empty=true
+                    if [[ -n "$(find "$new_path" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+                        dest_empty=false
+                    fi
+                    
+                    if [[ "$dest_empty" == "false" ]]; then
+                        if [[ "$INTERACTIVE" == "true" ]]; then
+                            if ! _confirm "Destination directory exists and is not empty. Merge/replace contents?"; then
+                                _log_warn "Move cancelled - destination directory exists"
+                                return 1
+                            fi
+                        else
+                            _log_error "Destination directory exists and is not empty (non-interactive mode): $new_path"
+                            return 1
+                        fi
+                    fi
+                fi
+                
+                # ========== CONCURRENCY GUARD ==========
+                if [[ "${FORCE:-false}" != "true" ]]; then
+                    _log_debug "Checking for running Claude processes..."
+                    local claude_processes
+                    claude_processes=$(pgrep -f "[Cc]laude" 2>/dev/null | wc -l) || claude_processes=0
+                    if [[ "$claude_processes" -gt 0 ]]; then
+                        _log_warn "Detected $claude_processes running Claude processes"
+                        if [[ "$INTERACTIVE" == "true" ]]; then
+                            if ! _confirm "Continue with active Claude processes? (may cause data corruption)"; then
+                                _log_warn "Move cancelled - Claude processes active"
+                                return 1
+                            fi
+                        else
+                            _log_error "Active Claude processes detected (use FORCE=true to override)"
+                            return 1
+                        fi
+                    fi
+                fi
+                
+                # ========== PROJECT MAPPING & COUNTING ==========
+                local from_project to_project
+                from_project=$(_suggest_project_dir_for "$old_path")
+                to_project=$(_suggest_project_dir_for "$new_path")
+                
+                # Count sessions and occurrences before any changes
+                local session_count=0 occurrence_count=0
+                if [[ -d "$from_project" ]]; then
+                    _log_debug "Scanning project for sessions to update..."
+                    while IFS= read -r session_file; do
+                        if [[ -f "$session_file" ]]; then
+                            local file_occurrences
+                            # Simplified grep pattern for better performance
+                            file_occurrences=$(grep -c "\"cwd\":\"$old_path\"" "$session_file" 2>/dev/null || echo 0)
+                            if [[ "$file_occurrences" -gt 0 ]]; then
+                                session_count=$((session_count + 1))
+                                occurrence_count=$((occurrence_count + file_occurrences))
+                            fi
+                        fi
+                    done < <(find "$from_project" -name "*.jsonl" -type f 2>/dev/null)
+                fi
+                
+                # ========== OPERATION PLAN ==========
+                _log_info "=== Operation Plan ==="
+                _log_info "Source:      $old_path"
+                _log_info "Destination: $new_path"
+                _log_info "Project:     $from_project -> $to_project"
+                _log_info "Sessions:    $session_count files with $occurrence_count cwd occurrences"
+                
+                if [[ ! -d "$from_project" ]]; then
+                    _log_warn "Project directory not found - will perform source-only move"
+                fi
+                
+                # ========== DRY RUN SUPPORT ==========
+                if [[ "$DRY_RUN" == "true" ]]; then
+                    _log_info "=== DRY RUN - No changes will be made ==="
+                    _log_debug "Would move: $old_path -> $new_path"
+                    if [[ -d "$from_project" ]]; then
+                        _log_debug "Would move project: $from_project -> $to_project"
+                        _log_debug "Would update $session_count session files ($occurrence_count total replacements)"
+                    fi
+                    _log_info "DRY RUN completed - use DRY_RUN=false to execute"
+                    return 0
+                fi
+                
+                # ========== INTERACTIVE CONFIRMATION ==========
+                if [[ "$INTERACTIVE" == "true" ]]; then
+                    if ! _confirm "Proceed with move operation?"; then
+                        _log_warn "Move cancelled by user"
+                        return 1
+                    fi
+                fi
+                
+                # ========== TRANSACTIONAL EXECUTION ==========
+                _log_info "=== Executing Move Operation ==="
+                
+                # Save undo info before any changes
+                _save_undo_info "move" "$old_path" "$new_path" "$from_project" "$to_project"
+                
+                # Step 1: Move source directory
+                _log_info "Step 1/3: Moving source directory..."
+                local new_parent
+                new_parent="$(dirname "$new_path")"
+                if [[ ! -d "$new_parent" ]]; then
+                    if ! mkdir -p "$new_parent"; then
+                        _log_error "Failed to create parent directory: $new_parent"
+                        rm -f "$UNDO_FILE"
+                        return 1
+                    fi
+                fi
+                
+                if ! mv "$old_path" "$new_path"; then
+                    _log_error "Failed to move source directory"
+                    rm -f "$UNDO_FILE"
+                    return 1
+                fi
+                _log_success "Moved source directory: $old_path -> $new_path"
+                
+                # Step 2: Move project directory (if exists)
+                _log_info "Step 2/3: Moving project directory..."
+                local project_moved="false"
+                if [[ -d "$from_project" ]]; then
+                    local project_parent
+                    project_parent="$(dirname "$to_project")"
+                    if [[ ! -d "$project_parent" ]]; then
+                        mkdir -p "$project_parent"
+                    fi
+                    
+                    if mv "$from_project" "$to_project"; then
+                        _log_success "Moved project: $(basename "$from_project") -> $(basename "$to_project")"
+                        project_moved="true"
+                    else
+                        _log_error "Failed to move project directory - attempting rollback"
+                        # Rollback source move
+                        if mv "$new_path" "$old_path" 2>/dev/null; then
+                            _log_warn "Rolled back source directory move"
+                        else
+                            _log_error "CRITICAL: Failed to rollback source move - manual intervention required"
+                        fi
+                        rm -f "$UNDO_FILE"
+                        return 1
+                    fi
+                else
+                    _log_warn "Project directory not found - source-only move completed"
+                fi
+                
+                # Step 3: Update JSON sessions (robust)
+                _log_info "Step 3/3: Updating session files..."
+                local target_project
+                target_project="$to_project"
+                if [[ "$project_moved" != "true" && -d "$from_project" ]]; then
+                    target_project="$from_project"
+                fi
+                
+                if [[ -d "$target_project" ]]; then
+                    local updated_files=0 total_replacements=0
+                    local old_esc new_esc
+                    old_esc=$(printf '%s' "$old_path" | sed -e 's/[\/&]/\\&/g')
+                    new_esc=$(printf '%s' "$new_path" | sed -e 's/[\/&]/\\&/g')
+                    
+                    while IFS= read -r session_file; do
+                        if [[ -f "$session_file" ]]; then
+                            # Count occurrences before replacement
+                            local before_count
+                            before_count=$(grep -cE "\"cwd\"[[:space:]]*:[[:space:]]*\"$old_esc\"" "$session_file" 2>/dev/null || echo 0)
+                            
+                            if [[ "$before_count" -gt 0 ]]; then
+                                # Backup the file
+                                cp "$session_file" "${session_file}.pre-move-backup" 2>/dev/null || true
+                                
+                                # Perform replacement with whitespace tolerance
+                                if [[ "$OSTYPE" == "darwin"* ]]; then
+                                    sed -i '' -E "s|\"cwd\"[[:space:]]*:[[:space:]]*\"$old_esc\"|\"cwd\":\"$new_esc\"|g" "$session_file"
+                                else
+                                    sed -i -E "s|\"cwd\"[[:space:]]*:[[:space:]]*\"$old_esc\"|\"cwd\":\"$new_esc\"|g" "$session_file"
+                                fi
+                                
+                                # Verify replacement
+                                local after_count
+                                after_count=$(grep -cE "\"cwd\"[[:space:]]*:[[:space:]]*\"$new_esc\"" "$session_file" 2>/dev/null || echo 0)
+                                
+                                if [[ "$after_count" -eq "$before_count" ]]; then
+                                    ((updated_files++))
+                                    ((total_replacements += after_count))
+                                    # Remove backup on success
+                                    rm -f "${session_file}.pre-move-backup" 2>/dev/null
+                                else
+                                    _log_warn "Replacement mismatch in $(basename "$session_file"): expected $before_count, got $after_count"
+                                fi
+                            fi
+                        fi
+                    done < <(find "$target_project" -name "*.jsonl" -type f 2>/dev/null)
+                    
+                    _log_success "Updated $updated_files session files ($total_replacements total replacements)"
+                    
+                    # ========== POST-VERIFICATION ==========
+                    _log_debug "Performing post-verification scan..."
+                    local remaining_count=0
+                    while IFS= read -r session_file; do
+                        local remaining
+                        remaining=$(grep -cE "\"cwd\"[[:space:]]*:[[:space:]]*\"$old_esc\"" "$session_file" 2>/dev/null || echo 0)
+                        ((remaining_count += remaining))
+                    done < <(find "$target_project" -name "*.jsonl" -type f 2>/dev/null)
+                    
+                    if [[ "$remaining_count" -gt 0 ]]; then
+                        _log_warn "Post-verification: $remaining_count residual old path references remain"
+                        _log_info "Use 'cm verify $target_project' to investigate"
+                    else
+                        _log_success "Post-verification: All path references updated successfully"
+                    fi
+                else
+                    _log_info "No project directory to update - source move completed"
+                fi
+                
+                _log_success "=== Move Operation Completed Successfully ==="
+                _log_info "Summary:"
+                _log_info "  • Source moved: $old_path -> $new_path"
+                if [[ "$project_moved" == "true" ]]; then
+                    _log_info "  • Project moved: $(basename "$from_project") -> $(basename "$to_project")"
+                    _log_info "  • Sessions updated: $updated_files files, $total_replacements replacements"
+                fi
+                _log_info "Use 'cm undo' to revert if needed"
+                return 0
+            fi
+
+            # Fallback to interactive full flow when args are not provided
             _log_info "=== Move Operation ==="
             _log_info "This will move both source directory and Claude project"
-            
-            # Use the full interactive flow that has all the safety checks
-            # Pass the arguments to the full command
             claude_manager full "$2" "$3"
             ;;
 
@@ -791,6 +1090,199 @@ claude_manager() {
             _undo_last_operation
             ;;
             
+        "verify"|"v")
+            # Verify project directory for path consistency
+            local project_dir="$2"
+            
+            if [[ -z "$project_dir" ]]; then
+                if [[ "$INTERACTIVE" == "true" ]]; then
+                    project_dir=$(_select_project)
+                    [[ $? -ne 0 ]] && return 1
+                else
+                    _log_error "Usage: cm verify <project_dir>"
+                    return 1
+                fi
+            fi
+            
+            if [[ ! -d "$project_dir" ]]; then
+                _log_error "Project directory not found: $project_dir"
+                return 1
+            fi
+            
+            _log_info "=== Project Verification: $(basename "$project_dir") ==="
+            
+            # Extract expected path from project directory name
+            local encoded_name
+            encoded_name=$(basename "$project_dir")
+            if [[ "$encoded_name" == -* ]]; then
+                # Decode the expected path
+                local expected_path
+                expected_path=$(echo "${encoded_name#-}" | sed 's|-|/|g')
+                expected_path="/$expected_path"
+                _log_info "Expected path from encoding: $expected_path"
+                
+                # Scan sessions for path mismatches
+                local total_sessions=0 consistent_sessions=0 mismatched_sessions=0
+                local unique_paths=() path_counts=()
+                
+                while IFS= read -r session_file; do
+                    if [[ -f "$session_file" ]]; then
+                        ((total_sessions++))
+                        
+                        # Extract all cwd paths from this session
+                        local session_paths
+                        session_paths=$(grep -oE "\"cwd\"[[:space:]]*:[[:space:]]*\"[^\"]+\"" "$session_file" 2>/dev/null | \
+                                      sed -E 's|\"cwd\"[[:space:]]*:[[:space:]]*\"([^\"]+)\"|\1|g' | sort -u)
+                        
+                        local has_expected=false has_other=false
+                        while IFS= read -r path; do
+                            if [[ -n "$path" ]]; then
+                                if [[ "$path" == "$expected_path" ]]; then
+                                    has_expected=true
+                                else
+                                    has_other=true
+                                    # Track unique unexpected paths
+                                    local found=false
+                                    for i in "${!unique_paths[@]}"; do
+                                        if [[ "${unique_paths[$i]}" == "$path" ]]; then
+                                            ((path_counts[$i]++))
+                                            found=true
+                                            break
+                                        fi
+                                    done
+                                    if [[ "$found" == "false" ]]; then
+                                        unique_paths+=("$path")
+                                        path_counts+=(1)
+                                    fi
+                                fi
+                            fi
+                        done <<< "$session_paths"
+                        
+                        if [[ "$has_expected" == "true" && "$has_other" == "false" ]]; then
+                            ((consistent_sessions++))
+                        elif [[ "$has_other" == "true" ]]; then
+                            ((mismatched_sessions++))
+                        fi
+                    fi
+                done < <(find "$project_dir" -name "*.jsonl" -type f 2>/dev/null)
+                
+                # Report results
+                _log_info "=== Verification Results ==="
+                _log_info "Total sessions: $total_sessions"
+                _log_info "Consistent: $consistent_sessions"
+                _log_info "Mismatched: $mismatched_sessions"
+                
+                if [[ ${#unique_paths[@]} -gt 0 ]]; then
+                    _log_warn "Unexpected paths found:"
+                    for i in "${!unique_paths[@]}"; do
+                        echo "  ${unique_paths[$i]} (${path_counts[$i]} occurrences)"
+                    done
+                fi
+                
+                if [[ "$mismatched_sessions" -eq 0 ]]; then
+                    _log_success "✓ All sessions have consistent paths"
+                else
+                    _log_warn "⚠ $mismatched_sessions sessions have path inconsistencies"
+                    _log_info "Consider running migration to fix inconsistencies"
+                fi
+            else
+                _log_warn "Cannot decode expected path from project name: $encoded_name"
+            fi
+            ;;
+            
+        "health"|"doctor")
+            # System health check
+            _log_info "=== Claude Manager Health Check ==="
+            
+            local health_issues=0
+            
+            # Check Claude directory
+            if [[ -d "$CLAUDE_DIR" ]]; then
+                _log_success "✓ Claude directory exists: $CLAUDE_DIR"
+                
+                if [[ -d "$CLAUDE_DIR/projects" ]]; then
+                    local project_count
+                    project_count=$(find "$CLAUDE_DIR/projects" -type d -mindepth 1 -maxdepth 1 | wc -l)
+                    _log_success "✓ Projects directory exists with $project_count projects"
+                else
+                    _log_error "✗ Projects directory missing: $CLAUDE_DIR/projects"
+                    ((health_issues++))
+                fi
+                
+                if [[ -w "$CLAUDE_DIR" ]]; then
+                    _log_success "✓ Claude directory is writable"
+                else
+                    _log_error "✗ Claude directory is not writable: $CLAUDE_DIR"
+                    ((health_issues++))
+                fi
+            else
+                _log_error "✗ Claude directory not found: $CLAUDE_DIR"
+                ((health_issues++))
+            fi
+            
+            # Check required tools
+            local tools=("sed" "grep" "find" "mv" "cp")
+            for tool in "${tools[@]}"; do
+                if command -v "$tool" >/dev/null 2>&1; then
+                    _log_success "✓ Required tool available: $tool"
+                else
+                    _log_error "✗ Required tool missing: $tool"
+                    ((health_issues++))
+                fi
+            done
+            
+            # Check optional tools
+            local optional_tools=("realpath" "pgrep")
+            for tool in "${optional_tools[@]}"; do
+                if command -v "$tool" >/dev/null 2>&1; then
+                    _log_success "✓ Optional tool available: $tool"
+                else
+                    _log_warn "⚠ Optional tool missing: $tool (functionality may be limited)"
+                fi
+            done
+            
+            # Check platform-specific tools
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                if command -v gsed >/dev/null 2>&1; then
+                    _log_success "✓ GNU sed available as gsed"
+                fi
+                if command -v gtimeout >/dev/null 2>&1; then
+                    _log_success "✓ GNU timeout available as gtimeout"
+                fi
+            fi
+            
+            # Check permissions on common paths
+            if [[ -f "$HOME/.bash_profile" ]] && [[ -w "$HOME/.bash_profile" ]]; then
+                _log_success "✓ Shell profile writable: ~/.bash_profile"
+            fi
+            if [[ -f "$HOME/.zshrc" ]] && [[ -w "$HOME/.zshrc" ]]; then
+                _log_success "✓ Shell profile writable: ~/.zshrc"
+            fi
+            
+            # Check for active Claude processes
+            local claude_procs
+            claude_procs=$(pgrep -f "[Cc]laude" 2>/dev/null | wc -l) || claude_procs=0
+            if [[ "$claude_procs" -gt 0 ]]; then
+                _log_warn "⚠ $claude_procs Claude processes currently running"
+                _log_info "  Consider closing Claude before major operations"
+            else
+                _log_success "✓ No active Claude processes detected"
+            fi
+            
+            # Summary
+            _log_info "=== Health Check Summary ==="
+            if [[ "$health_issues" -eq 0 ]]; then
+                _log_success "✅ System health: GOOD ($health_issues issues)"
+                _log_info "Claude Manager is ready for use"
+            elif [[ "$health_issues" -le 2 ]]; then
+                _log_warn "⚠️ System health: WARNING ($health_issues issues)"
+                _log_info "Minor issues detected - functionality may be limited"
+            else
+                _log_error "❌ System health: CRITICAL ($health_issues issues)"
+                _log_info "Major issues detected - Claude Manager may not function properly"
+            fi
+            ;;
+
         "config"|"cfg")
             _log_info "Current configuration:"
             echo "  CLAUDE_DIR: $CLAUDE_DIR"
@@ -806,14 +1298,20 @@ claude_manager() {
             echo "  migrate <old_path> <new_path> [project_dir]"
             echo "    Update session paths after moving/renaming source directory"
             echo ""
-            echo "  move <old_path> <new_path> <from_project> <to_project>"
-            echo "    Move both source directory and Claude project, updating sessions"
+            echo "  move <old_path> <new_path>"
+            echo "    Robust move with edge case handling, pre-flight checks, and rollback"
             echo ""
             echo "  full [new_path]"
             echo "    Interactive helper - run from source directory to move"
             echo ""
             echo "  list [project_dir]"
             echo "    List all projects or sessions within a specific project"
+            echo ""
+            echo "  verify <project_dir>"
+            echo "    Check project for path consistency and report mismatches"
+            echo ""
+            echo "  health"
+            echo "    System health check - validate tools, permissions, and setup"
             echo ""
             echo "  config"
             echo "    Display current configuration values"
@@ -828,11 +1326,14 @@ claude_manager() {
             echo "  CLAUDE_BACKUP_STRATEGY - file|project (default: file)"
             echo "  CLAUDE_INTERACTIVE - true|false (default: true)"
             echo "  CLAUDE_DRY_RUN - true|false (default: false)"
+            echo "  FORCE - true|false (override safety checks, default: false)"
             echo ""
             echo "Examples:"
             echo '  cm migrate "/Users/old/project" "/Users/new/project"'
-            echo '  cm move "/old/src" "/new/src" "/old/claude" "/new/claude"'
-            echo '  CLAUDE_DRY_RUN=true cm list'
+            echo '  cm move "/old/src" "/new/src"  # New robust move'
+            echo '  CLAUDE_DRY_RUN=true cm move "/old" "/new"  # Preview only'
+            echo '  cm verify ~/.claude/projects/-Users-name-project'
+            echo '  cm health  # Check system status'
             ;;
 
         *)
