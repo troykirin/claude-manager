@@ -1,24 +1,18 @@
 //! Clean integration API for search engines and TUI components
 
 use crate::{
-    error::{ClaudeSessionError, Result, BatchParsingResult},
-    models::*,
-    parser::{SessionParser, ErrorRecoverySettings, ExtractionConfig},
-    extractor::{BlockExtractor, ExtractionStats},
+    error::{BatchParsingResult, ClaudeSessionError, Result},
     insights::InsightsAnalyzer,
+    models::*,
+    parser::SessionParser,
 };
-use std::{
-    collections::HashMap,
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, sync::Arc};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 /// High-level API for Claude session parsing and analysis
 pub struct ClaudeSessionApi {
     parser: SessionParser,
-    extractor: BlockExtractor,
     analyzer: InsightsAnalyzer,
     cache: Arc<RwLock<SessionCache>>,
     config: ApiConfig,
@@ -143,13 +137,11 @@ impl ClaudeSessionApi {
     /// Create API with custom configuration
     pub fn with_config(config: ApiConfig) -> Self {
         let parser = SessionParser::new();
-        let extractor = BlockExtractor::new();
         let analyzer = InsightsAnalyzer::new();
         let cache = Arc::new(RwLock::new(SessionCache::default()));
 
         Self {
             parser,
-            extractor,
             analyzer,
             cache,
             config,
@@ -159,7 +151,7 @@ impl ClaudeSessionApi {
     /// Parse a single session file with full analysis
     pub async fn parse_session_file<P: AsRef<Path>>(&self, path: P) -> Result<Arc<Session>> {
         let path_str = path.as_ref().to_string_lossy().to_string();
-        
+
         // Check cache first
         if self.config.enable_caching {
             let cache = self.cache.read().await;
@@ -168,7 +160,10 @@ impl ClaudeSessionApi {
                 // Update access count
                 drop(cache);
                 let mut cache_write = self.cache.write().await;
-                *cache_write.access_count.entry(path_str.clone()).or_insert(0) += 1;
+                *cache_write
+                    .access_count
+                    .entry(path_str.clone())
+                    .or_insert(0) += 1;
                 info!("Returning cached session for {}", path_str);
                 return Ok(session_clone);
             }
@@ -190,7 +185,7 @@ impl ClaudeSessionApi {
             let mut cache = self.cache.write().await;
             cache.sessions.insert(path_str.clone(), arc_session.clone());
             cache.access_count.insert(path_str, 1);
-            
+
             // Evict oldest entries if cache is full
             if cache.sessions.len() > self.config.max_cache_size {
                 self.evict_least_used_session(&mut cache).await;
@@ -201,35 +196,44 @@ impl ClaudeSessionApi {
     }
 
     /// Parse multiple session files with comprehensive error reporting
-    pub async fn parse_session_files<P: AsRef<Path> + Send + 'static>(&self, paths: Vec<P>) -> BatchParsingResult<Arc<Session>> {
+    pub async fn parse_session_files<P: AsRef<Path> + Send + 'static>(
+        &self,
+        paths: Vec<P>,
+    ) -> BatchParsingResult<Arc<Session>> {
         info!("Starting batch parsing of {} files", paths.len());
-        
+
         let parser_result = self.parser.parse_files_with_error_reporting(paths).await;
         let mut api_result = BatchParsingResult::new();
-        
+
         // Convert sessions to Arc and add insights
         for session in parser_result.successful {
             let mut enhanced_session = session;
-            
+
             if self.config.auto_insights_extraction {
                 match self.analyzer.analyze_session(&enhanced_session).await {
                     Ok(insights) => enhanced_session.insights = insights,
                     Err(e) => warn!("Failed to extract insights: {}", e),
                 }
             }
-            
+
             api_result.successful.push(Arc::new(enhanced_session));
         }
-        
+
         api_result.failed = parser_result.failed;
         api_result.performance_stats = parser_result.performance_stats;
-        
-        info!("Batch parsing completed with {:.1}% success rate", api_result.success_rate() * 100.0);
+
+        info!(
+            "Batch parsing completed with {:.1}% success rate",
+            api_result.success_rate() * 100.0
+        );
         api_result
     }
 
     /// Parse all sessions in a directory
-    pub async fn parse_directory<P: AsRef<Path>>(&self, dir_path: P) -> BatchParsingResult<Arc<Session>> {
+    pub async fn parse_directory<P: AsRef<Path>>(
+        &self,
+        dir_path: P,
+    ) -> BatchParsingResult<Arc<Session>> {
         let sessions = match self.parser.parse_directory(dir_path).await {
             Ok(sessions) => sessions,
             Err(e) => {
@@ -246,17 +250,17 @@ impl ClaudeSessionApi {
         };
 
         let mut result = BatchParsingResult::new();
-        
+
         for session in sessions {
             let mut enhanced_session = session;
-            
+
             if self.config.auto_insights_extraction {
                 match self.analyzer.analyze_session(&enhanced_session).await {
                     Ok(insights) => enhanced_session.insights = insights,
                     Err(e) => warn!("Failed to extract insights: {}", e),
                 }
             }
-            
+
             result.successful.push(Arc::new(enhanced_session));
         }
 
@@ -269,9 +273,14 @@ impl ClaudeSessionApi {
     }
 
     /// Calculate aggregate statistics across multiple sessions
-    pub async fn calculate_aggregate_stats(&self, sessions: &[Arc<Session>]) -> Result<AggregateStats> {
+    pub async fn calculate_aggregate_stats(
+        &self,
+        sessions: &[Arc<Session>],
+    ) -> Result<AggregateStats> {
         if sessions.is_empty() {
-            return Err(ClaudeSessionError::invalid_format("No sessions provided for analysis"));
+            return Err(ClaudeSessionError::invalid_format(
+                "No sessions provided for analysis",
+            ));
         }
 
         let total_sessions = sessions.len();
@@ -297,8 +306,9 @@ impl ClaudeSessionApi {
                 *topic_frequency.entry(topic.name.clone()).or_insert(0) += topic.mentions;
             }
         }
-        
-        let mut common_topics: Vec<_> = topic_frequency.into_iter()
+
+        let mut common_topics: Vec<_> = topic_frequency
+            .into_iter()
             .map(|(name, mentions)| Topic {
                 name,
                 relevance_score: mentions as f64 / total_sessions as f64,
@@ -311,9 +321,7 @@ impl ClaudeSessionApi {
         common_topics.truncate(10);
 
         // Calculate average session duration
-        let durations: Vec<_> = sessions.iter()
-            .filter_map(|s| s.duration())
-            .collect();
+        let durations: Vec<_> = sessions.iter().filter_map(|s| s.duration()).collect();
         let average_session_duration = if durations.is_empty() {
             chrono::Duration::zero()
         } else {
@@ -337,13 +345,18 @@ impl ClaudeSessionApi {
     }
 
     /// Export sessions to various formats
-    pub async fn export_sessions(&self, sessions: &[Arc<Session>], format: ExportFormat) -> Result<String> {
+    pub async fn export_sessions(
+        &self,
+        sessions: &[Arc<Session>],
+        format: ExportFormat,
+    ) -> Result<String> {
         match format {
             ExportFormat::Json => {
                 let session_refs: Vec<&Session> = sessions.iter().map(|s| s.as_ref()).collect();
-                serde_json::to_string_pretty(&session_refs)
-                    .map_err(|e| ClaudeSessionError::invalid_format(format!("JSON export failed: {}", e)))
-            },
+                serde_json::to_string_pretty(&session_refs).map_err(|e| {
+                    ClaudeSessionError::invalid_format(format!("JSON export failed: {}", e))
+                })
+            }
             ExportFormat::Csv => self.export_to_csv(sessions).await,
             ExportFormat::Markdown => self.export_to_markdown(sessions).await,
         }
@@ -380,7 +393,10 @@ impl ClaudeSessionApi {
         }
     }
 
-    async fn analyze_aggregate_collaboration(&self, sessions: &[Arc<Session>]) -> Result<CollaborationSummary> {
+    async fn analyze_aggregate_collaboration(
+        &self,
+        sessions: &[Arc<Session>],
+    ) -> Result<CollaborationSummary> {
         let mut interaction_styles = HashMap::new();
         let mut total_cycles = 0;
         let mut question_patterns = HashMap::new();
@@ -388,28 +404,33 @@ impl ClaudeSessionApi {
 
         for session in sessions {
             let patterns = &session.insights.collaboration_patterns;
-            *interaction_styles.entry(patterns.interaction_style).or_insert(0) += 1;
+            *interaction_styles
+                .entry(patterns.interaction_style)
+                .or_insert(0) += 1;
             total_cycles += patterns.iterative_cycles;
-            
+
             for (pattern, count) in &patterns.question_types {
                 *question_patterns.entry(pattern.clone()).or_insert(0) += count;
             }
-            
+
             knowledge_transfers.push(patterns.knowledge_transfer);
         }
 
-        let most_common_interaction_style = interaction_styles.into_iter()
+        let most_common_interaction_style = interaction_styles
+            .into_iter()
             .max_by_key(|(_, count)| *count)
             .map(|(style, _)| style)
             .unwrap_or(InteractionStyle::TaskOriented);
 
         let average_iterative_cycles = total_cycles as f64 / sessions.len() as f64;
-        
-        let common_question_patterns = question_patterns.into_iter()
+
+        let common_question_patterns = question_patterns
+            .into_iter()
             .map(|(pattern, _)| pattern)
             .collect();
 
-        let knowledge_transfer_trend = knowledge_transfers.iter().sum::<f64>() / knowledge_transfers.len() as f64;
+        let knowledge_transfer_trend =
+            knowledge_transfers.iter().sum::<f64>() / knowledge_transfers.len() as f64;
 
         Ok(CollaborationSummary {
             most_common_interaction_style,
@@ -419,7 +440,10 @@ impl ClaudeSessionApi {
         })
     }
 
-    async fn analyze_productivity_trends(&self, sessions: &[Arc<Session>]) -> Result<ProductivityTrends> {
+    async fn analyze_productivity_trends(
+        &self,
+        sessions: &[Arc<Session>],
+    ) -> Result<ProductivityTrends> {
         let mut total_tasks = 0;
         let mut total_problems = 0;
         let mut resolution_times = Vec::new();
@@ -437,7 +461,7 @@ impl ClaudeSessionApi {
 
         let tasks_per_session = total_tasks as f64 / sessions.len() as f64;
         let problems_per_session = total_problems as f64 / sessions.len() as f64;
-        
+
         let average_resolution_time = if resolution_times.is_empty() {
             chrono::Duration::zero()
         } else {
@@ -445,7 +469,8 @@ impl ClaudeSessionApi {
         };
 
         let code_quality_trend = quality_scores.iter().sum::<f64>() / quality_scores.len() as f64;
-        let efficiency_improvement = efficiency_scores.iter().sum::<f64>() / efficiency_scores.len() as f64;
+        let efficiency_improvement =
+            efficiency_scores.iter().sum::<f64>() / efficiency_scores.len() as f64;
 
         Ok(ProductivityTrends {
             tasks_per_session,
@@ -457,14 +482,17 @@ impl ClaudeSessionApi {
     }
 
     async fn export_to_csv(&self, sessions: &[Arc<Session>]) -> Result<String> {
-        let mut csv = String::from("id,file_path,created_at,total_blocks,total_words,session_duration,primary_topics\n");
-        
+        let mut csv = String::from(
+            "id,file_path,created_at,total_blocks,total_words,session_duration,primary_topics\n",
+        );
+
         for session in sessions {
-            let duration_minutes = session.duration()
-                .map(|d| d.num_minutes())
-                .unwrap_or(0);
-            
-            let topics = session.insights.primary_topics.iter()
+            let duration_minutes = session.duration().map(|d| d.num_minutes()).unwrap_or(0);
+
+            let topics = session
+                .insights
+                .primary_topics
+                .iter()
                 .take(3)
                 .map(|t| t.name.clone())
                 .collect::<Vec<_>>()
@@ -487,23 +515,37 @@ impl ClaudeSessionApi {
 
     async fn export_to_markdown(&self, sessions: &[Arc<Session>]) -> Result<String> {
         let mut markdown = String::from("# Claude Sessions Analysis\n\n");
-        
+
         for session in sessions {
             markdown.push_str(&format!("## Session: {}\n\n", session.metadata.file_path));
-            markdown.push_str(&format!("- **Created:** {}\n", session.metadata.created_at.format("%Y-%m-%d %H:%M:%S")));
-            markdown.push_str(&format!("- **Blocks:** {}\n", session.statistics.total_blocks));
-            markdown.push_str(&format!("- **Words:** {}\n", session.statistics.total_words));
-            
+            markdown.push_str(&format!(
+                "- **Created:** {}\n",
+                session.metadata.created_at.format("%Y-%m-%d %H:%M:%S")
+            ));
+            markdown.push_str(&format!(
+                "- **Blocks:** {}\n",
+                session.statistics.total_blocks
+            ));
+            markdown.push_str(&format!(
+                "- **Words:** {}\n",
+                session.statistics.total_words
+            ));
+
             if let Some(duration) = session.duration() {
-                markdown.push_str(&format!("- **Duration:** {} minutes\n", duration.num_minutes()));
+                markdown.push_str(&format!(
+                    "- **Duration:** {} minutes\n",
+                    duration.num_minutes()
+                ));
             }
-            
+
             markdown.push_str("\n### Primary Topics\n\n");
             for topic in &session.insights.primary_topics {
-                markdown.push_str(&format!("- **{}** (relevance: {:.2}, mentions: {})\n", 
-                    topic.name, topic.relevance_score, topic.mentions));
+                markdown.push_str(&format!(
+                    "- **{}** (relevance: {:.2}, mentions: {})\n",
+                    topic.name, topic.relevance_score, topic.mentions
+                ));
             }
-            
+
             markdown.push_str("\n---\n\n");
         }
 
@@ -524,7 +566,7 @@ impl SessionSearch {
             sessions,
             indexed_content: HashMap::new(),
         };
-        
+
         search.build_index();
         search
     }
@@ -536,15 +578,17 @@ impl SessionSearch {
                 // Index content tokens
                 for token in &block.content.tokens {
                     let normalized_token = token.text.to_lowercase();
-                    self.indexed_content.entry(normalized_token)
+                    self.indexed_content
+                        .entry(normalized_token)
                         .or_default()
                         .push(session_idx);
                 }
-                
+
                 // Index topics
                 for topic in &block.metadata.topics {
                     let normalized_topic = topic.to_lowercase();
-                    self.indexed_content.entry(normalized_topic)
+                    self.indexed_content
+                        .entry(normalized_topic)
                         .or_default()
                         .push(session_idx);
                 }
@@ -558,9 +602,9 @@ impl SessionSearch {
         let mut session_matches = Vec::new();
         let mut block_matches = Vec::new();
 
-        for (session_idx, session) in self.sessions.iter().enumerate() {
+        for (_session_idx, session) in self.sessions.iter().enumerate() {
             let session_match = self.evaluate_session_match(session, &query).await?;
-            
+
             if session_match.relevance_score > 0.0 {
                 // Find matching blocks
                 for (block_idx, block) in session.blocks.iter().enumerate() {
@@ -569,13 +613,14 @@ impl SessionSearch {
                             session_id: session.id,
                             block: block.clone(),
                             relevance_score: self.calculate_block_relevance(block, &query),
-                            highlighted_content: self.highlight_matches(&block.content.raw_text, &query.text_contains),
+                            highlighted_content: self
+                                .highlight_matches(&block.content.raw_text, &query.text_contains),
                             context_blocks: self.get_context_blocks(session, block_idx, 2),
                         };
                         block_matches.push(block_match);
                     }
                 }
-                
+
                 session_matches.push(session_match);
             }
         }
@@ -597,7 +642,11 @@ impl SessionSearch {
 
     // Helper methods for search functionality
 
-    async fn evaluate_session_match(&self, session: &Session, query: &SearchQuery) -> Result<SessionMatch> {
+    async fn evaluate_session_match(
+        &self,
+        session: &Session,
+        query: &SearchQuery,
+    ) -> Result<SessionMatch> {
         let mut relevance_score = 0.0;
         let mut matching_blocks = Vec::new();
         let mut match_reasons = Vec::new();
@@ -685,7 +734,12 @@ impl SessionSearch {
 
         // Text matches
         for text in &query.text_contains {
-            if block.content.raw_text.to_lowercase().contains(&text.to_lowercase()) {
+            if block
+                .content
+                .raw_text
+                .to_lowercase()
+                .contains(&text.to_lowercase())
+            {
                 relevance += 1.0;
             }
         }
@@ -709,18 +763,23 @@ impl SessionSearch {
 
     fn highlight_matches(&self, text: &str, search_terms: &[String]) -> String {
         let mut highlighted = text.to_string();
-        
+
         for term in search_terms {
             highlighted = highlighted.replace(term, &format!("**{}**", term));
         }
-        
+
         highlighted
     }
 
-    fn get_context_blocks(&self, session: &Session, block_idx: usize, context_size: usize) -> Vec<Block> {
+    fn get_context_blocks(
+        &self,
+        session: &Session,
+        block_idx: usize,
+        context_size: usize,
+    ) -> Vec<Block> {
         let start = block_idx.saturating_sub(context_size);
         let end = (block_idx + context_size + 1).min(session.blocks.len());
-        
+
         session.blocks[start..end].to_vec()
     }
 }
@@ -758,12 +817,12 @@ mod tests {
     async fn test_search_interface() {
         let sessions = vec![]; // Empty for testing
         let search = SessionSearch::new(sessions);
-        
+
         let query = SearchQuery {
             text_contains: vec!["test".to_string()],
             ..Default::default()
         };
-        
+
         let results = search.search(query).await.unwrap();
         assert_eq!(results.total_matches, 0);
     }
@@ -776,7 +835,7 @@ mod tests {
             has_code_blocks: Some(true),
             ..Default::default()
         };
-        
+
         assert_eq!(query.text_contains.len(), 1);
         assert!(query.has_code_blocks.unwrap());
     }

@@ -1,12 +1,9 @@
 //! Intelligent insights extraction and conversation analysis
 
-use crate::{
-    error::{ClaudeSessionError, Result},
-    models::*,
-};
+use crate::{error::Result, models::*};
+use chrono::Duration;
 use std::collections::{HashMap, HashSet};
-use chrono::{Duration, Utc};
-use tracing::{debug, info, warn};
+use tracing::info;
 
 /// Advanced insights analyzer for conversation sessions
 pub struct InsightsAnalyzer {
@@ -65,36 +62,87 @@ impl InsightsAnalyzer {
     pub fn with_config(config: AnalysisConfig) -> Self {
         let patterns = InsightPatterns {
             question_indicators: vec![
-                "how do", "what is", "why does", "where can", "when should",
-                "which way", "can you help", "is it possible", "?",
+                "how do",
+                "what is",
+                "why does",
+                "where can",
+                "when should",
+                "which way",
+                "can you help",
+                "is it possible",
+                "?",
             ],
             solution_indicators: vec![
-                "you can", "try this", "solution", "fix", "resolve",
-                "here's how", "the answer is", "implement", "use this",
+                "you can",
+                "try this",
+                "solution",
+                "fix",
+                "resolve",
+                "here's how",
+                "the answer is",
+                "implement",
+                "use this",
             ],
             problem_indicators: vec![
-                "error", "issue", "problem", "bug", "fail", "broken",
-                "doesn't work", "not working", "exception", "crash",
+                "error",
+                "issue",
+                "problem",
+                "bug",
+                "fail",
+                "broken",
+                "doesn't work",
+                "not working",
+                "exception",
+                "crash",
             ],
             learning_indicators: vec![
-                "learn", "understand", "explain", "teach", "show me",
-                "what does this mean", "how does this work", "tutorial",
+                "learn",
+                "understand",
+                "explain",
+                "teach",
+                "show me",
+                "what does this mean",
+                "how does this work",
+                "tutorial",
             ],
             debugging_indicators: vec![
-                "debug", "trace", "investigate", "figure out", "find the cause",
-                "stack trace", "logs", "diagnostic", "troubleshoot",
+                "debug",
+                "trace",
+                "investigate",
+                "figure out",
+                "find the cause",
+                "stack trace",
+                "logs",
+                "diagnostic",
+                "troubleshoot",
             ],
             implementation_indicators: vec![
-                "implement", "code", "write", "create", "build", "develop",
-                "add feature", "make changes", "modify", "update",
+                "implement",
+                "code",
+                "write",
+                "create",
+                "build",
+                "develop",
+                "add feature",
+                "make changes",
+                "modify",
+                "update",
             ],
             review_indicators: vec![
-                "review", "check", "validate", "verify", "test", "examine",
-                "look at", "analyze", "assess", "evaluate",
+                "review", "check", "validate", "verify", "test", "examine", "look at", "analyze",
+                "assess", "evaluate",
             ],
             planning_indicators: vec![
-                "plan", "design", "architecture", "structure", "organize",
-                "strategy", "approach", "workflow", "process", "roadmap",
+                "plan",
+                "design",
+                "architecture",
+                "structure",
+                "organize",
+                "strategy",
+                "approach",
+                "workflow",
+                "process",
+                "roadmap",
             ],
         };
 
@@ -103,7 +151,10 @@ impl InsightsAnalyzer {
 
     /// Analyze a session and extract comprehensive insights
     pub async fn analyze_session(&self, session: &Session) -> Result<SessionInsights> {
-        info!("Starting comprehensive session analysis with {} blocks", session.blocks.len());
+        info!(
+            "Starting comprehensive session analysis with {} blocks",
+            session.blocks.len()
+        );
 
         let mut insights = SessionInsights {
             primary_topics: Vec::new(),
@@ -156,10 +207,12 @@ impl InsightsAnalyzer {
             insights.collaboration_patterns = self.analyze_collaboration_patterns(session).await?;
         }
 
-        info!("Session analysis complete - found {} topics, {} phases, {} learning outcomes", 
-              insights.primary_topics.len(), 
-              insights.conversation_flow.phases.len(),
-              insights.learning_outcomes.len());
+        info!(
+            "Session analysis complete - found {} topics, {} phases, {} learning outcomes",
+            insights.primary_topics.len(),
+            insights.conversation_flow.phases.len(),
+            insights.learning_outcomes.len()
+        );
 
         Ok(insights)
     }
@@ -173,19 +226,25 @@ impl InsightsAnalyzer {
         // Analyze all blocks for topic extraction
         for block in &session.blocks {
             let content_lower = block.content.raw_text.to_lowercase();
-            
+
             // Extract technical topics
             let topics = self.extract_technical_topics_from_text(&content_lower);
             for topic in topics {
                 *topic_frequency.entry(topic.clone()).or_insert(0) += 1;
-                
+
                 // Store context snippets
                 let context = self.extract_topic_context(&block.content.raw_text, &topic);
-                topic_contexts.entry(topic.clone()).or_default().push(context);
+                topic_contexts
+                    .entry(topic.clone())
+                    .or_default()
+                    .push(context);
 
                 // Associate with tools used in this block
                 for tool in &block.tools {
-                    tool_associations.entry(topic.clone()).or_default().insert(tool.tool_name.clone());
+                    tool_associations
+                        .entry(topic.clone())
+                        .or_default()
+                        .insert(tool.tool_name.clone());
                 }
             }
 
@@ -203,9 +262,12 @@ impl InsightsAnalyzer {
         let mut topics: Vec<Topic> = topic_frequency
             .into_iter()
             .map(|(name, mentions)| {
-                let relevance_score = self.calculate_topic_relevance(mentions, session.blocks.len());
-                let subtopics = self.extract_subtopics(&name, &topic_contexts.get(&name).unwrap_or(&Vec::new()));
-                let related_tools = tool_associations.get(&name)
+                let relevance_score =
+                    self.calculate_topic_relevance(mentions, session.blocks.len());
+                let subtopics = self
+                    .extract_subtopics(&name, &topic_contexts.get(&name).unwrap_or(&Vec::new()));
+                let related_tools = tool_associations
+                    .get(&name)
                     .map(|tools| tools.iter().cloned().collect())
                     .unwrap_or_default();
 
@@ -248,8 +310,10 @@ impl InsightsAnalyzer {
                 Some((current_phase_type, phase_start)) => {
                     if detected_phase != *current_phase_type {
                         // Phase transition detected
-                        let phase_duration = self.calculate_phase_duration(session, *phase_start, i);
-                        let primary_activity = self.extract_primary_activity(session, *phase_start, i);
+                        let phase_duration =
+                            self.calculate_phase_duration(session, *phase_start, i);
+                        let primary_activity =
+                            self.extract_primary_activity(session, *phase_start, i);
 
                         phases.push(ConversationPhase {
                             phase_type: *current_phase_type,
@@ -275,8 +339,10 @@ impl InsightsAnalyzer {
 
         // Close final phase
         if let Some((phase_type, phase_start)) = current_phase {
-            let phase_duration = self.calculate_phase_duration(session, phase_start, session.blocks.len());
-            let primary_activity = self.extract_primary_activity(session, phase_start, session.blocks.len());
+            let phase_duration =
+                self.calculate_phase_duration(session, phase_start, session.blocks.len());
+            let primary_activity =
+                self.extract_primary_activity(session, phase_start, session.blocks.len());
 
             phases.push(ConversationPhase {
                 phase_type,
@@ -308,16 +374,17 @@ impl InsightsAnalyzer {
                 // Extract skill area from context
                 let skill_area = self.extract_skill_area(&content_lower);
                 let concepts = self.extract_learned_concepts(&content_lower);
-                
+
                 skill_areas.entry(skill_area).or_default().extend(concepts);
             }
 
             // Detect successful problem solving (learning indicator)
-            if block.role == Role::Assistant && 
-               self.contains_patterns(&content_lower, &self.patterns.solution_indicators) {
+            if block.role == Role::Assistant
+                && self.contains_patterns(&content_lower, &self.patterns.solution_indicators)
+            {
                 let skill_area = self.extract_skill_area_from_solution(&content_lower);
                 let concepts = self.extract_solution_concepts(&content_lower);
-                
+
                 skill_areas.entry(skill_area).or_default().extend(concepts);
             }
         }
@@ -341,11 +408,15 @@ impl InsightsAnalyzer {
     }
 
     /// Calculate comprehensive productivity metrics
-    async fn calculate_productivity_metrics(&self, session: &Session) -> Result<ProductivityMetrics> {
+    async fn calculate_productivity_metrics(
+        &self,
+        session: &Session,
+    ) -> Result<ProductivityMetrics> {
         let mut tasks_completed = 0;
         let mut problems_solved = 0;
         let mut time_to_resolution = Vec::new();
-        let mut problem_start_times: HashMap<String, chrono::DateTime<chrono::Utc>> = HashMap::new();
+        let mut problem_start_times: HashMap<String, chrono::DateTime<chrono::Utc>> =
+            HashMap::new();
 
         for block in &session.blocks {
             let content_lower = block.content.raw_text.to_lowercase();
@@ -359,7 +430,7 @@ impl InsightsAnalyzer {
             // Track problem resolution
             if self.contains_patterns(&content_lower, &self.patterns.solution_indicators) {
                 problems_solved += 1;
-                
+
                 // Calculate resolution time if we have a matching problem
                 let solution_key = self.extract_solution_key(&content_lower);
                 if let Some(start_time) = problem_start_times.remove(&solution_key) {
@@ -369,9 +440,12 @@ impl InsightsAnalyzer {
             }
 
             // Track task completion
-            if block.role == Role::Assistant && 
-               (content_lower.contains("completed") || content_lower.contains("finished") || 
-                content_lower.contains("done") || content_lower.contains("implemented")) {
+            if block.role == Role::Assistant
+                && (content_lower.contains("completed")
+                    || content_lower.contains("finished")
+                    || content_lower.contains("done")
+                    || content_lower.contains("implemented"))
+            {
                 tasks_completed += 1;
             }
         }
@@ -391,11 +465,12 @@ impl InsightsAnalyzer {
     }
 
     /// Analyze collaboration patterns and interaction styles
-    async fn analyze_collaboration_patterns(&self, session: &Session) -> Result<CollaborationPatterns> {
+    async fn analyze_collaboration_patterns(
+        &self,
+        session: &Session,
+    ) -> Result<CollaborationPatterns> {
         let mut question_types = HashMap::new();
         let mut iterative_cycles = 0;
-        let mut user_clarifications = 0;
-        let mut assistant_clarifications = 0;
 
         let mut previous_topic: Option<String> = None;
 
@@ -421,14 +496,18 @@ impl InsightsAnalyzer {
                     }
 
                     // Count clarification requests
-                    if content_lower.contains("clarify") || content_lower.contains("what do you mean") {
-                        user_clarifications += 1;
+                    if content_lower.contains("clarify")
+                        || content_lower.contains("what do you mean")
+                    {
+                        // user_clarifications += 1; // unused
                     }
                 }
                 Role::Assistant => {
                     // Count assistant clarifications
-                    if content_lower.contains("to clarify") || content_lower.contains("let me explain") {
-                        assistant_clarifications += 1;
+                    if content_lower.contains("to clarify")
+                        || content_lower.contains("let me explain")
+                    {
+                        // assistant_clarifications += 1; // unused
                     }
                 }
                 _ => {}
@@ -454,14 +533,37 @@ impl InsightsAnalyzer {
 
     fn extract_technical_topics_from_text(&self, text: &str) -> Vec<String> {
         let mut topics = Vec::new();
-        
+
         // Programming concepts
         let programming_topics = [
-            "async", "await", "promise", "function", "class", "struct", "enum",
-            "database", "api", "rest", "graphql", "sql", "json", "xml",
-            "docker", "kubernetes", "deployment", "testing", "debugging",
-            "performance", "optimization", "security", "authentication",
-            "frontend", "backend", "fullstack", "microservices", "monolith"
+            "async",
+            "await",
+            "promise",
+            "function",
+            "class",
+            "struct",
+            "enum",
+            "database",
+            "api",
+            "rest",
+            "graphql",
+            "sql",
+            "json",
+            "xml",
+            "docker",
+            "kubernetes",
+            "deployment",
+            "testing",
+            "debugging",
+            "performance",
+            "optimization",
+            "security",
+            "authentication",
+            "frontend",
+            "backend",
+            "fullstack",
+            "microservices",
+            "monolith",
         ];
 
         for topic in &programming_topics {
@@ -512,19 +614,19 @@ impl InsightsAnalyzer {
 
     fn calculate_block_complexity(&self, block: &Block) -> f64 {
         let mut complexity = 0.0;
-        
+
         // Base complexity from content length
         complexity += (block.content.word_count as f64).ln() * 0.1;
-        
+
         // Code blocks increase complexity
         complexity += block.content.code_blocks.len() as f64 * 0.5;
-        
+
         // Tool usage increases complexity
         complexity += block.tools.len() as f64 * 0.3;
-        
+
         // Links and references increase complexity
         complexity += block.content.links.len() as f64 * 0.2;
-        
+
         complexity.min(10.0) // Cap at 10.0
     }
 
@@ -532,14 +634,14 @@ impl InsightsAnalyzer {
         if start >= session.blocks.len() || end > session.blocks.len() || start >= end {
             return Duration::zero();
         }
-        
+
         let start_time = session.blocks[start].timestamp;
         let end_time = if end == session.blocks.len() {
             session.blocks.last().unwrap().timestamp
         } else {
             session.blocks[end - 1].timestamp
         };
-        
+
         end_time - start_time
     }
 
@@ -549,16 +651,16 @@ impl InsightsAnalyzer {
         }
 
         let mut activity_indicators = HashMap::new();
-        
+
         for i in start..end.min(session.blocks.len()) {
             let content = &session.blocks[i].content.raw_text.to_lowercase();
-            
+
             for pattern in &self.patterns.implementation_indicators {
                 if content.contains(pattern) {
                     *activity_indicators.entry("implementation").or_insert(0) += 1;
                 }
             }
-            
+
             for pattern in &self.patterns.debugging_indicators {
                 if content.contains(pattern) {
                     *activity_indicators.entry("debugging").or_insert(0) += 1;
@@ -631,13 +733,13 @@ impl InsightsAnalyzer {
         (concepts.len() as f64 * 0.2).min(1.0)
     }
 
-    fn has_practical_application(&self, session: &Session, skill_area: &str) -> bool {
+    fn has_practical_application(&self, session: &Session, _skill_area: &str) -> bool {
         // Check if there's evidence of practical application
         session.blocks.iter().any(|block| {
-            block.content.code_blocks.len() > 0 || 
-            block.tools.len() > 0 ||
-            block.content.raw_text.contains("implement") ||
-            block.content.raw_text.contains("create")
+            block.content.code_blocks.len() > 0
+                || block.tools.len() > 0
+                || block.content.raw_text.contains("implement")
+                || block.content.raw_text.contains("create")
         })
     }
 
@@ -652,7 +754,9 @@ impl InsightsAnalyzer {
     }
 
     fn calculate_code_quality_score(&self, session: &Session) -> f64 {
-        let code_blocks: Vec<_> = session.blocks.iter()
+        let code_blocks: Vec<_> = session
+            .blocks
+            .iter()
             .flat_map(|block| &block.content.code_blocks)
             .collect();
 
@@ -663,52 +767,73 @@ impl InsightsAnalyzer {
         let mut total_score = 0.0;
         for code_block in &code_blocks {
             let mut block_score = 5.0; // Base score
-            
+
             // Bonus for having comments
             if code_block.content.contains("//") || code_block.content.contains("#") {
                 block_score += 1.0;
             }
-            
+
             // Bonus for proper structure (basic heuristic)
             if code_block.content.contains("function") || code_block.content.contains("fn") {
                 block_score += 1.0;
             }
-            
+
             total_score += block_score;
         }
 
         (total_score / code_blocks.len() as f64).min(10.0)
     }
 
-    fn calculate_efficiency_rating(&self, _session: &Session, resolution_times: &[Duration]) -> f64 {
+    fn calculate_efficiency_rating(
+        &self,
+        _session: &Session,
+        resolution_times: &[Duration],
+    ) -> f64 {
         if resolution_times.is_empty() {
             return 5.0; // Default rating
         }
 
-        let avg_resolution_minutes = resolution_times.iter()
+        let avg_resolution_minutes = resolution_times
+            .iter()
             .map(|d| d.num_minutes() as f64)
-            .sum::<f64>() / resolution_times.len() as f64;
+            .sum::<f64>()
+            / resolution_times.len() as f64;
 
         // Higher efficiency for faster resolution (inverted scale)
         (60.0 / avg_resolution_minutes.max(1.0)).min(10.0)
     }
 
     fn calculate_collaboration_effectiveness(&self, session: &Session) -> f64 {
-        let user_blocks = session.blocks.iter().filter(|b| b.role == Role::User).count();
-        let assistant_blocks = session.blocks.iter().filter(|b| b.role == Role::Assistant).count();
-        
+        let user_blocks = session
+            .blocks
+            .iter()
+            .filter(|b| b.role == Role::User)
+            .count();
+        let assistant_blocks = session
+            .blocks
+            .iter()
+            .filter(|b| b.role == Role::Assistant)
+            .count();
+
         if user_blocks == 0 || assistant_blocks == 0 {
             return 0.0;
         }
 
         // Good collaboration has balanced interaction
-        let balance_ratio = (user_blocks as f64 / assistant_blocks as f64).min(assistant_blocks as f64 / user_blocks as f64);
+        let balance_ratio = (user_blocks as f64 / assistant_blocks as f64)
+            .min(assistant_blocks as f64 / user_blocks as f64);
         balance_ratio * 10.0
     }
 
-    fn determine_interaction_style(&self, session: &Session, question_types: &HashMap<String, usize>) -> InteractionStyle {
+    fn determine_interaction_style(
+        &self,
+        session: &Session,
+        question_types: &HashMap<String, usize>,
+    ) -> InteractionStyle {
         let total_questions: usize = question_types.values().sum();
-        let code_blocks_count: usize = session.blocks.iter()
+        let code_blocks_count: usize = session
+            .blocks
+            .iter()
             .map(|b| b.content.code_blocks.len())
             .sum();
 
@@ -718,7 +843,9 @@ impl InsightsAnalyzer {
             InteractionStyle::Learning
         } else if question_types.contains_key("why does") {
             InteractionStyle::Analytical
-        } else if session.blocks.iter().any(|b| b.content.raw_text.contains("creative") || b.content.raw_text.contains("design")) {
+        } else if session.blocks.iter().any(|b| {
+            b.content.raw_text.contains("creative") || b.content.raw_text.contains("design")
+        }) {
             InteractionStyle::Creative
         } else {
             InteractionStyle::Exploratory
@@ -726,7 +853,9 @@ impl InsightsAnalyzer {
     }
 
     fn assess_feedback_quality(&self, session: &Session) -> f64 {
-        let assistant_blocks: Vec<_> = session.blocks.iter()
+        let assistant_blocks: Vec<_> = session
+            .blocks
+            .iter()
             .filter(|b| b.role == Role::Assistant)
             .collect();
 
@@ -737,7 +866,7 @@ impl InsightsAnalyzer {
         let mut quality_score = 0.0;
         for block in &assistant_blocks {
             let content = &block.content.raw_text;
-            
+
             // Quality indicators
             if content.contains("example") || content.contains("for instance") {
                 quality_score += 1.0;
@@ -759,10 +888,16 @@ impl InsightsAnalyzer {
     fn calculate_knowledge_transfer(&self, session: &Session) -> f64 {
         // Simple metric based on progression from questions to understanding
         let user_blocks = session.blocks.iter().filter(|b| b.role == Role::User);
-        let question_count = user_blocks.filter(|b| b.content.raw_text.contains('?')).count();
-        
-        let total_user_blocks = session.blocks.iter().filter(|b| b.role == Role::User).count();
-        
+        let question_count = user_blocks
+            .filter(|b| b.content.raw_text.contains('?'))
+            .count();
+
+        let total_user_blocks = session
+            .blocks
+            .iter()
+            .filter(|b| b.role == Role::User)
+            .count();
+
         if total_user_blocks == 0 {
             return 0.0;
         }
@@ -775,7 +910,10 @@ impl InsightsAnalyzer {
     fn extract_primary_topic(&self, content: &str) -> String {
         // Extract the most prominent topic from content
         let topics = self.extract_technical_topics_from_text(content);
-        topics.into_iter().next().unwrap_or_else(|| "general".to_string())
+        topics
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "general".to_string())
     }
 }
 
@@ -786,7 +924,7 @@ mod tests {
 
     fn create_test_session() -> Session {
         let mut session = Session::new();
-        
+
         // Add a user question
         session.add_block(Block {
             id: Uuid::new_v4(),
@@ -884,7 +1022,10 @@ mod tests {
         let analyzer = InsightsAnalyzer::new();
         let session = create_test_session();
 
-        let metrics = analyzer.calculate_productivity_metrics(&session).await.unwrap();
+        let metrics = analyzer
+            .calculate_productivity_metrics(&session)
+            .await
+            .unwrap();
         assert!(metrics.code_quality_score > 0.0);
         assert!(metrics.efficiency_rating > 0.0);
     }
@@ -892,10 +1033,22 @@ mod tests {
     #[test]
     fn test_detect_conversation_phase() {
         let analyzer = InsightsAnalyzer::new();
-        
-        assert_eq!(analyzer.detect_conversation_phase("let's plan the architecture"), PhaseType::Planning);
-        assert_eq!(analyzer.detect_conversation_phase("implement the function"), PhaseType::Implementation);
-        assert_eq!(analyzer.detect_conversation_phase("debug this error"), PhaseType::Debugging);
-        assert_eq!(analyzer.detect_conversation_phase("let's review and verify"), PhaseType::Review);
+
+        assert_eq!(
+            analyzer.detect_conversation_phase("let's plan the architecture"),
+            PhaseType::Planning
+        );
+        assert_eq!(
+            analyzer.detect_conversation_phase("implement the function"),
+            PhaseType::Implementation
+        );
+        assert_eq!(
+            analyzer.detect_conversation_phase("debug this error"),
+            PhaseType::Debugging
+        );
+        assert_eq!(
+            analyzer.detect_conversation_phase("let's review and verify"),
+            PhaseType::Review
+        );
     }
 }

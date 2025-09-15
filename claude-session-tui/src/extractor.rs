@@ -1,13 +1,8 @@
 //! Advanced block extraction system for conversation parsing and analysis
 
-use crate::{
-    error::{ClaudeSessionError, Result},
-    models::*,
-    parser::ExtractionConfig,
-};
+use crate::{error::Result, models::*, parser::ExtractionConfig};
 use regex::Regex;
 use std::collections::HashMap;
-use tracing::{debug, warn};
 
 /// Advanced conversation block extractor with pattern recognition
 pub struct BlockExtractor {
@@ -92,7 +87,7 @@ impl BlockExtractor {
     /// Extract comprehensive content from a conversation block
     pub fn extract_block_content(&mut self, raw_text: &str) -> Result<BlockContent> {
         self.stats.total_blocks_processed += 1;
-        
+
         let word_count = raw_text.split_whitespace().count();
         let character_count = raw_text.chars().count();
 
@@ -149,7 +144,11 @@ impl BlockExtractor {
 
             // Update statistics
             if let Some(lang) = &detected_language {
-                *self.stats.programming_languages_detected.entry(lang.clone()).or_insert(0) += 1;
+                *self
+                    .stats
+                    .programming_languages_detected
+                    .entry(lang.clone())
+                    .or_insert(0) += 1;
             }
 
             // Check for filename hints in comments
@@ -234,8 +233,11 @@ impl BlockExtractor {
                 position += word_pos;
             }
 
-            let token_type = self.classify_token_advanced(word, &text[..position + word.len().min(text.len() - position)]);
-            
+            let token_type = self.classify_token_advanced(
+                word,
+                &text[..position + word.len().min(text.len() - position)],
+            );
+
             tokens.push(ContentToken {
                 text: word.to_string(),
                 token_type,
@@ -299,24 +301,41 @@ impl BlockExtractor {
     }
 
     /// Enhanced programming language detection from content analysis
-    pub(crate) fn detect_programming_language_from_content(&self, code: &str) -> Option<ProgrammingLanguage> {
+    pub(crate) fn detect_programming_language_from_content(
+        &self,
+        code: &str,
+    ) -> Option<ProgrammingLanguage> {
         let code_lower = code.to_lowercase();
 
         // Rust-specific patterns
-        if code.contains("fn ") || code.contains("let ") || code.contains("impl ") 
-            || code.contains("struct ") || code.contains("enum ") || code.contains("trait ") {
+        if code.contains("fn ")
+            || code.contains("let ")
+            || code.contains("impl ")
+            || code.contains("struct ")
+            || code.contains("enum ")
+            || code.contains("trait ")
+        {
             return Some(ProgrammingLanguage::Rust);
         }
 
         // Python-specific patterns
-        if code.contains("def ") || code.contains("import ") || code.contains("from ") 
-            || code.contains("class ") || code_lower.contains("print(") {
+        if code.contains("def ")
+            || code.contains("import ")
+            || code.contains("from ")
+            || code.contains("class ")
+            || code_lower.contains("print(")
+        {
             return Some(ProgrammingLanguage::Python);
         }
 
         // JavaScript/TypeScript patterns
-        if code.contains("function ") || code.contains("const ") || code.contains("let ") 
-            || code.contains("var ") || code.contains("=>") || code.contains("console.log") {
+        if code.contains("function ")
+            || code.contains("const ")
+            || code.contains("let ")
+            || code.contains("var ")
+            || code.contains("=>")
+            || code.contains("console.log")
+        {
             if code.contains(": ") && (code.contains("interface ") || code.contains("type ")) {
                 return Some(ProgrammingLanguage::TypeScript);
             }
@@ -324,42 +343,62 @@ impl BlockExtractor {
         }
 
         // Java patterns
-        if code.contains("public class ") || code.contains("private ") || code.contains("protected ") 
-            || code.contains("System.out.") {
+        if code.contains("public class ")
+            || code.contains("private ")
+            || code.contains("protected ")
+            || code.contains("System.out.")
+        {
             return Some(ProgrammingLanguage::Java);
         }
 
         // Go patterns
-        if code.contains("func ") || code.contains("package ") || code.contains("import (") 
-            || code.contains("fmt.") {
+        if code.contains("func ")
+            || code.contains("package ")
+            || code.contains("import (")
+            || code.contains("fmt.")
+        {
             return Some(ProgrammingLanguage::Go);
         }
 
         // Shell script patterns
-        if code.starts_with("#!/bin/bash") || code.starts_with("#!/bin/sh") 
-            || code.contains("echo ") || code.contains("$") {
+        if code.starts_with("#!/bin/bash")
+            || code.starts_with("#!/bin/sh")
+            || code.contains("echo ")
+            || code.contains("$")
+        {
             return Some(ProgrammingLanguage::Shell);
         }
 
         // SQL patterns
-        if code_lower.contains("select ") || code_lower.contains("insert ") 
-            || code_lower.contains("update ") || code_lower.contains("create table") {
+        if code_lower.contains("select ")
+            || code_lower.contains("insert ")
+            || code_lower.contains("update ")
+            || code_lower.contains("create table")
+        {
             return Some(ProgrammingLanguage::SQL);
         }
 
         // HTML patterns
-        if code.contains("</") && code.contains("<") && (code.contains("html") || code.contains("div")) {
+        if code.contains("</")
+            && code.contains("<")
+            && (code.contains("html") || code.contains("div"))
+        {
             return Some(ProgrammingLanguage::HTML);
         }
 
         // CSS patterns
-        if code.contains("{") && code.contains(":") && code.contains(";") 
-            && (code.contains("color") || code.contains("margin") || code.contains("padding")) {
+        if code.contains("{")
+            && code.contains(":")
+            && code.contains(";")
+            && (code.contains("color") || code.contains("margin") || code.contains("padding"))
+        {
             return Some(ProgrammingLanguage::CSS);
         }
 
         // JSON patterns
-        if (code.starts_with('{') && code.ends_with('}')) || (code.starts_with('[') && code.ends_with(']')) {
+        if (code.starts_with('{') && code.ends_with('}'))
+            || (code.starts_with('[') && code.ends_with(']'))
+        {
             if serde_json::from_str::<serde_json::Value>(code).is_ok() {
                 return Some(ProgrammingLanguage::JSON);
             }
@@ -403,17 +442,20 @@ impl BlockExtractor {
         if self.patterns.file_path.is_match(token) {
             return TokenType::FilePath;
         }
-        
+
         if self.patterns.url.is_match(token) {
             return TokenType::URL;
         }
-        
+
         if self.patterns.command.is_match(token) {
             return TokenType::Command;
         }
 
         // Numeric patterns
-        if token.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') {
+        if token
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+        {
             return TokenType::Number;
         }
 
@@ -428,10 +470,30 @@ impl BlockExtractor {
 
         // Keywords (basic set - could be expanded)
         let keywords = [
-            "function", "class", "struct", "enum", "interface", "type",
-            "let", "const", "var", "def", "fn", "impl", "trait",
-            "if", "else", "for", "while", "match", "switch",
-            "import", "from", "use", "package", "namespace",
+            "function",
+            "class",
+            "struct",
+            "enum",
+            "interface",
+            "type",
+            "let",
+            "const",
+            "var",
+            "def",
+            "fn",
+            "impl",
+            "trait",
+            "if",
+            "else",
+            "for",
+            "while",
+            "match",
+            "switch",
+            "import",
+            "from",
+            "use",
+            "package",
+            "namespace",
         ];
 
         if keywords.contains(&token.to_lowercase().as_str()) {
@@ -439,9 +501,10 @@ impl BlockExtractor {
         }
 
         // String patterns
-        if (token.starts_with('"') && token.ends_with('"')) 
+        if (token.starts_with('"') && token.ends_with('"'))
             || (token.starts_with('\'') && token.ends_with('\''))
-            || (token.starts_with('`') && token.ends_with('`')) {
+            || (token.starts_with('`') && token.ends_with('`'))
+        {
             return TokenType::String;
         }
 
@@ -458,13 +521,18 @@ impl BlockExtractor {
     fn classify_link_type(&self, url: &str) -> LinkType {
         let url_lower = url.to_lowercase();
 
-        if url_lower.contains("github.com") || url_lower.contains("gitlab.com") 
-            || url_lower.contains("bitbucket.org") {
+        if url_lower.contains("github.com")
+            || url_lower.contains("gitlab.com")
+            || url_lower.contains("bitbucket.org")
+        {
             return LinkType::Repository;
         }
 
-        if url_lower.contains("docs.") || url_lower.contains("/docs/") 
-            || url_lower.contains("documentation") || url_lower.contains("/api/") {
+        if url_lower.contains("docs.")
+            || url_lower.contains("/docs/")
+            || url_lower.contains("documentation")
+            || url_lower.contains("/api/")
+        {
             return LinkType::Documentation;
         }
 
@@ -479,10 +547,10 @@ impl BlockExtractor {
     fn extract_filename_from_code(&self, code: &str) -> Option<String> {
         // Look for filename hints in comments
         let filename_patterns = [
-            r"//\s*([^\s]+\.\w+)",      // // filename.ext
-            r"#\s*([^\s]+\.\w+)",       // # filename.ext
-            r"/\*\s*([^\s]+\.\w+)",     // /* filename.ext
-            r"<!--\s*([^\s]+\.\w+)",    // <!-- filename.ext
+            r"//\s*([^\s]+\.\w+)",   // // filename.ext
+            r"#\s*([^\s]+\.\w+)",    // # filename.ext
+            r"/\*\s*([^\s]+\.\w+)",  // /* filename.ext
+            r"<!--\s*([^\s]+\.\w+)", // <!-- filename.ext
         ];
 
         for pattern in &filename_patterns {
@@ -500,7 +568,7 @@ impl BlockExtractor {
     fn looks_like_code(&self, text: &str) -> bool {
         let code_indicators = ['(', ')', '{', '}', '[', ']', ';', '=', '.', ':', '$'];
         let indicator_count = text.chars().filter(|c| code_indicators.contains(c)).count();
-        
+
         // If more than 20% of characters are code indicators, likely code
         indicator_count as f64 / text.len() as f64 > 0.2
     }
@@ -508,9 +576,11 @@ impl BlockExtractor {
     /// Check if a string looks like a variable name
     fn looks_like_variable(&self, text: &str) -> bool {
         // Variable-like: starts with letter/underscore, contains only alphanumeric/underscore
-        text.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_') &&
-        text.chars().all(|c| c.is_alphanumeric() || c == '_') &&
-        text.len() > 1
+        text.chars()
+            .next()
+            .map_or(false, |c| c.is_alphabetic() || c == '_')
+            && text.chars().all(|c| c.is_alphanumeric() || c == '_')
+            && text.len() > 1
     }
 
     /// Extract context around a mention
@@ -541,7 +611,7 @@ impl BlockExtractor {
         // Remove excessive whitespace and normalize line endings
         let mut formatted = text.replace("\r\n", "\n");
         formatted = formatted.replace("\r", "\n");
-        
+
         // Remove trailing whitespace from lines
         formatted = formatted
             .lines()
@@ -551,7 +621,9 @@ impl BlockExtractor {
 
         // Compress multiple blank lines into single blank line
         let multiple_newlines = Regex::new(r"\n{3,}").unwrap();
-        formatted = multiple_newlines.replace_all(&formatted, "\n\n").to_string();
+        formatted = multiple_newlines
+            .replace_all(&formatted, "\n\n")
+            .to_string();
 
         formatted
     }
@@ -602,22 +674,28 @@ mod tests {
     fn test_code_block_extraction() {
         let mut extractor = BlockExtractor::new();
         let text = "Here's some Rust code:\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\nAnd here's Python:\n```python\nprint(\"Hello, world!\")\n```";
-        
+
         let content = extractor.extract_block_content(text).unwrap();
         assert_eq!(content.code_blocks.len(), 2);
-        assert_eq!(content.code_blocks[0].language, Some(ProgrammingLanguage::Rust));
-        assert_eq!(content.code_blocks[1].language, Some(ProgrammingLanguage::Python));
+        assert_eq!(
+            content.code_blocks[0].language,
+            Some(ProgrammingLanguage::Rust)
+        );
+        assert_eq!(
+            content.code_blocks[1].language,
+            Some(ProgrammingLanguage::Python)
+        );
     }
 
     #[test]
     fn test_language_detection_from_content() {
         let extractor = BlockExtractor::new();
-        
+
         assert_eq!(
             extractor.detect_programming_language_from_content("fn main() { println!(\"test\"); }"),
             Some(ProgrammingLanguage::Rust)
         );
-        
+
         assert_eq!(
             extractor.detect_programming_language_from_content("def hello():\n    print(\"test\")"),
             Some(ProgrammingLanguage::Python)
@@ -628,7 +706,7 @@ mod tests {
     fn test_url_extraction() {
         let mut extractor = BlockExtractor::new();
         let text = "Check out https://github.com/rust-lang/rust and also https://docs.rs/tokio";
-        
+
         let content = extractor.extract_block_content(text).unwrap();
         assert_eq!(content.links.len(), 2);
         assert_eq!(content.links[0].link_type, LinkType::Repository);
@@ -638,20 +716,34 @@ mod tests {
     #[test]
     fn test_token_classification() {
         let extractor = BlockExtractor::new();
-        
-        assert_eq!(extractor.classify_token_advanced("hello()", ""), TokenType::Function);
-        assert_eq!(extractor.classify_token_advanced("/path/to/file.txt", ""), TokenType::FilePath);
-        assert_eq!(extractor.classify_token_advanced("function", ""), TokenType::Keyword);
-        assert_eq!(extractor.classify_token_advanced("123", ""), TokenType::Number);
+
+        assert_eq!(
+            extractor.classify_token_advanced("hello()", ""),
+            TokenType::Function
+        );
+        assert_eq!(
+            extractor.classify_token_advanced("/path/to/file.txt", ""),
+            TokenType::FilePath
+        );
+        assert_eq!(
+            extractor.classify_token_advanced("function", ""),
+            TokenType::Keyword
+        );
+        assert_eq!(
+            extractor.classify_token_advanced("123", ""),
+            TokenType::Number
+        );
     }
 
     #[test]
     fn test_mention_extraction() {
         let extractor = BlockExtractor::new();
         let text = "Let's edit the file /src/main.rs and call the function process_data()";
-        
+
         let mentions = extractor.extract_mentions(text).unwrap();
         assert!(mentions.iter().any(|m| m.mention_type == MentionType::File));
-        assert!(mentions.iter().any(|m| m.mention_type == MentionType::Function));
+        assert!(mentions
+            .iter()
+            .any(|m| m.mention_type == MentionType::Function));
     }
 }

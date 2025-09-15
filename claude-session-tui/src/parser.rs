@@ -1,28 +1,25 @@
 //! High-performance JSONL parser for Claude session files with streaming support
 
 use crate::{
-    error::{ClaudeSessionError, Result, BatchParsingResult, ErrorContext, ErrorSeverity, PerformanceStats},
+    error::{BatchParsingResult, ClaudeSessionError, ErrorContext, ErrorSeverity, Result},
     models::*,
 };
-use serde::{Serialize, Deserialize};
+
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::Instant,
 };
 use tokio::{
     fs,
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader as AsyncBufReader},
+    io::{AsyncBufReadExt, BufReader as AsyncBufReader},
     sync::Semaphore,
     task::JoinHandle,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use walkdir::WalkDir;
-use rayon::prelude::*;
 
 /// High-performance session parser with streaming capabilities
 pub struct SessionParser {
@@ -70,7 +67,7 @@ impl SessionParser {
     pub fn new() -> Self {
         Self {
             max_concurrent_files: num_cpus::get().min(16),
-            memory_limit_mb: 1024, // 1GB default
+            memory_limit_mb: 1024,          // 1GB default
             performance_threshold_ms: 5000, // 5 seconds
             error_recovery: ErrorRecoverySettings {
                 skip_malformed_lines: true,
@@ -138,7 +135,8 @@ impl SessionParser {
         let mut session = Session::new();
         session.metadata.file_path = path.to_string_lossy().to_string();
         session.metadata.file_size_bytes = file_size;
-        session.metadata.last_modified = metadata.modified()
+        session.metadata.last_modified = metadata
+            .modified()
             .map(|t| chrono::DateTime::from(t))
             .unwrap_or_else(|_| chrono::Utc::now());
 
@@ -158,7 +156,10 @@ impl SessionParser {
                         Ok(block) => session.add_block(block),
                         Err(e) => {
                             if self.error_recovery.detailed_error_reporting {
-                                warn!("Failed to convert message to block at line {}: {}", line_number, e);
+                                warn!(
+                                    "Failed to convert message to block at line {}: {}",
+                                    line_number, e
+                                );
                             }
                             if !self.error_recovery.skip_malformed_lines {
                                 return Err(e);
@@ -172,9 +173,12 @@ impl SessionParser {
                 }
                 Err(e) => {
                     consecutive_errors += 1;
-                    
+
                     if consecutive_errors > self.error_recovery.max_consecutive_errors {
-                        error!("Too many consecutive errors ({}), aborting parse", consecutive_errors);
+                        error!(
+                            "Too many consecutive errors ({}), aborting parse",
+                            consecutive_errors
+                        );
                         return Err(ClaudeSessionError::MultipleParsing {
                             count: consecutive_errors,
                         });
@@ -191,7 +195,9 @@ impl SessionParser {
         }
 
         session.metadata.line_count = total_lines;
-        session.metadata.created_at = session.blocks.first()
+        session.metadata.created_at = session
+            .blocks
+            .first()
             .map(|b| b.timestamp)
             .unwrap_or(chrono::Utc::now());
 
@@ -219,7 +225,10 @@ impl SessionParser {
     }
 
     /// Parse multiple files in parallel
-    pub async fn parse_files<P: AsRef<Path> + Send + 'static>(&self, paths: Vec<P>) -> Result<Vec<Session>> {
+    pub async fn parse_files<P: AsRef<Path> + Send + 'static>(
+        &self,
+        paths: Vec<P>,
+    ) -> Result<Vec<Session>> {
         let start_time = Instant::now();
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_files));
 
@@ -230,7 +239,7 @@ impl SessionParser {
             .map(|path| {
                 let parser = self.clone_config();
                 let permit = semaphore.clone();
-                
+
                 tokio::spawn(async move {
                     let _permit = permit.acquire().await.unwrap();
                     parser.parse_file(path).await
@@ -272,7 +281,7 @@ impl SessionParser {
     /// Parse all JSONL files in a directory
     pub async fn parse_directory<P: AsRef<Path>>(&self, dir_path: P) -> Result<Vec<Session>> {
         let dir_path = dir_path.as_ref();
-        
+
         if !dir_path.exists() || !dir_path.is_dir() {
             return Err(ClaudeSessionError::FileNotFound {
                 path: dir_path.to_string_lossy().to_string(),
@@ -337,10 +346,11 @@ impl SessionParser {
 
         for (task_index, task_result) in results.into_iter().enumerate() {
             match task_result {
-                Ok((index, path_str, parse_result)) => match parse_result {
+                Ok((_index, path_str, parse_result)) => match parse_result {
                     Ok(session) => {
                         result.performance_stats.lines_processed += session.metadata.line_count;
-                        result.performance_stats.bytes_processed += session.metadata.file_size_bytes as usize;
+                        result.performance_stats.bytes_processed +=
+                            session.metadata.file_size_bytes as usize;
                         result.successful.push(session);
                     }
                     Err(e) => {
@@ -383,7 +393,7 @@ impl SessionParser {
     /// Parse a single JSONL line into a raw message
     fn parse_jsonl_line(&self, line: &str, line_number: usize) -> Result<Option<RawMessage>> {
         let line = line.trim();
-        
+
         // Skip empty lines and comments
         if line.is_empty() || line.starts_with('#') {
             return Ok(None);
@@ -399,16 +409,17 @@ impl SessionParser {
         &self,
         raw_message: RawMessage,
         line_number: usize,
-        session: &Session,
+        _session: &Session,
     ) -> Result<Block> {
         let role = Role::from_string(&raw_message.role)?;
-        
-        let timestamp = raw_message.timestamp
+
+        let timestamp = raw_message
+            .timestamp
             .parse::<chrono::DateTime<chrono::Utc>>()
             .map_err(|_| ClaudeSessionError::invalid_timestamp(&raw_message.timestamp))?;
 
         let content = self.extract_block_content(&raw_message.content)?;
-        
+
         // Extract data before moving raw_message fields
         let tools = self.extract_tool_invocations(&raw_message)?;
         let attachments = self.extract_attachments(&raw_message)?;
@@ -472,14 +483,15 @@ impl SessionParser {
     /// Extract code blocks from text
     fn extract_code_blocks(&self, text: &str) -> Result<Vec<CodeBlock>> {
         use regex::Regex;
-        
+
         let code_block_regex = Regex::new(r"```(\w+)?\n(.*?)\n```")?;
         let mut code_blocks = Vec::new();
 
         for captures in code_block_regex.captures_iter(text) {
-            let language = captures.get(1)
+            let language = captures
+                .get(1)
                 .map(|m| self.detect_programming_language(m.as_str()));
-            
+
             let content = captures.get(2).unwrap().as_str().to_string();
             let start_position = captures.get(0).unwrap().start();
             let end_position = captures.get(0).unwrap().end();
@@ -500,7 +512,7 @@ impl SessionParser {
     /// Extract links from text
     fn extract_links(&self, text: &str) -> Result<Vec<Link>> {
         use regex::Regex;
-        
+
         let url_regex = Regex::new(r"https?://[^\s)]+").unwrap();
         let mut links = Vec::new();
 
@@ -521,11 +533,11 @@ impl SessionParser {
     /// Tokenize content for search indexing
     fn tokenize_content(&self, text: &str) -> Result<Vec<ContentToken>> {
         use regex::Regex;
-        
+
         let token_regex = Regex::new(r"\b\w+\b|[^\w\s]").unwrap();
         let mut tokens = Vec::new();
 
-        for (position, captures) in token_regex.captures_iter(text).enumerate() {
+        for (_position, captures) in token_regex.captures_iter(text).enumerate() {
             let token_text = captures.get(0).unwrap().as_str().to_string();
             let token_type = self.classify_token_type(&token_text);
             let start_pos = captures.get(0).unwrap().start();
@@ -542,14 +554,14 @@ impl SessionParser {
     }
 
     /// Extract tool invocations from raw message
-    fn extract_tool_invocations(&self, raw_message: &RawMessage) -> Result<Vec<ToolInvocation>> {
+    fn extract_tool_invocations(&self, _raw_message: &RawMessage) -> Result<Vec<ToolInvocation>> {
         // This would parse the tools field from the raw message
         // Implementation depends on the actual Claude JSONL format
         Ok(Vec::new())
     }
 
     /// Extract attachments from raw message
-    fn extract_attachments(&self, raw_message: &RawMessage) -> Result<Vec<Attachment>> {
+    fn extract_attachments(&self, _raw_message: &RawMessage) -> Result<Vec<Attachment>> {
         // This would parse attachments from the raw message
         // Implementation depends on the actual Claude JSONL format
         Ok(Vec::new())
@@ -656,7 +668,7 @@ mod tests {
     async fn test_parse_empty_file() {
         let parser = SessionParser::new();
         let temp_file = NamedTempFile::new().unwrap();
-        
+
         let session = parser.parse_file(temp_file.path()).await.unwrap();
         assert_eq!(session.blocks.len(), 0);
     }
@@ -671,7 +683,7 @@ mod tests {
 
         let session = parser.parse_file("test.jsonl").await.unwrap();
         assert_eq!(session.blocks.len(), 1);
-        
+
         tokio::fs::remove_file("test.jsonl").await.unwrap();
     }
 
@@ -685,8 +697,17 @@ mod tests {
     #[test]
     fn test_programming_language_detection() {
         let parser = SessionParser::new();
-        assert_eq!(parser.detect_programming_language("rust"), ProgrammingLanguage::Rust);
-        assert_eq!(parser.detect_programming_language("python"), ProgrammingLanguage::Python);
-        assert_eq!(parser.detect_programming_language("unknown"), ProgrammingLanguage::Unknown("unknown".to_string()));
+        assert_eq!(
+            parser.detect_programming_language("rust"),
+            ProgrammingLanguage::Rust
+        );
+        assert_eq!(
+            parser.detect_programming_language("python"),
+            ProgrammingLanguage::Python
+        );
+        assert_eq!(
+            parser.detect_programming_language("unknown"),
+            ProgrammingLanguage::Unknown("unknown".to_string())
+        );
     }
 }
