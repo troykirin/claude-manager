@@ -571,7 +571,7 @@ impl ExtractionPatterns {
     /// Compile all regex patterns used for extraction
     fn compile() -> Result<Self> {
         Ok(Self {
-            code_block: Regex::new(r"```(\w+)?\s*\n(.*?)\n```")?,
+            code_block: Regex::new(r"(?s)```(\w+)?\s*\n(.*?)\n```")?,
             inline_code: Regex::new(r"`([^`]+)`")?,
             file_path: Regex::new(r"[/\w.-]+\.\w+")?,
             url: Regex::new(r"https?://[^\s)\]]+")?,

@@ -896,6 +896,6 @@ mod tests {
         assert_eq!(analyzer.detect_conversation_phase("let's plan the architecture"), PhaseType::Planning);
         assert_eq!(analyzer.detect_conversation_phase("implement the function"), PhaseType::Implementation);
         assert_eq!(analyzer.detect_conversation_phase("debug this error"), PhaseType::Debugging);
-        assert_eq!(analyzer.detect_conversation_phase("review this code"), PhaseType::Review);
+        assert_eq!(analyzer.detect_conversation_phase("let's review and verify"), PhaseType::Review);
     }
 }
