@@ -38,6 +38,34 @@ claude-session-tui = { path = "./claude-session-tui" }
 tokio = { version = "1.40", features = ["full"] }
 ```
 
+## TUI Usage
+
+Run the interactive terminal UI (requires the `tui` feature):
+
+```bash
+# Default (reads from ./demo_projects)
+cargo run --features tui --bin claude-session-tui
+
+# Specify a directory of .jsonl files
+cargo run --features tui --bin claude-session-tui -- --dir ./path/to/sessions
+
+# Short form
+cargo run --features tui --bin claude-session-tui -- -d ./my_sessions
+
+# Show help
+cargo run --features tui --bin claude-session-tui -- --help
+```
+
+Flags
+- `-d, --dir <path>` or `--dir=<path>`: directory with `.jsonl` session files (default: `demo_projects/`)
+- `-h, --help`: print usage and exit
+
+Keys
+- Navigation: `j/k`, `↑/↓`
+- Search: `/` then type, `Enter` to apply
+- View cycle: `v` (Summary → Full JSON → Snippet Browser)
+- Quit: `q` or `Esc`
+
 ### Basic Usage
 
 ```rust

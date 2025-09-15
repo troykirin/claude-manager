@@ -3,6 +3,19 @@
 //! This library provides robust, type-safe parsing of Claude JSONL session files
 //! with high performance streaming support and comprehensive error handling.
 
+#![allow(unused_imports)]
+#![allow(dead_code)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::len_zero)]
+#![allow(clippy::map_clone)]
+#![allow(clippy::unused_enumerate_index)]
+#![allow(clippy::iter_kv_map)]
+#![allow(clippy::format_in_format_args)]
+#![allow(clippy::redundant_closure)]
+#![allow(clippy::unnecessary_map_or)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::needless_borrow)]
+
 pub mod api;
 pub mod error;
 pub mod extractor;

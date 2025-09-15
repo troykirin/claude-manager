@@ -2,6 +2,7 @@ use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io;
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 use tokio::time;
@@ -21,12 +22,42 @@ async fn main() -> anyhow::Result<()> {
     // Library init logs a startup message, but does not set a subscriber
     claude_session_tui::init()?;
 
+    // Parse CLI arguments for data directory
+    let mut data_dir = PathBuf::from("demo_projects");
+    {
+        let mut args = std::env::args().skip(1);
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "-h" | "--help" => {
+                    println!(
+                        "Usage: claude-session-tui [--dir <path>]\n\nOptions:\n  -d, --dir <path>   Directory containing .jsonl session files (default: demo_projects)\n  -h, --help         Show this help and exit"
+                    );
+                    return Ok(());
+                }
+                "-d" | "--dir" => {
+                    if let Some(val) = args.next() {
+                        data_dir = PathBuf::from(val);
+                    } else {
+                        eprintln!("Missing value for --dir");
+                    }
+                }
+                _ if arg.starts_with("--dir=") => {
+                    let val = &arg["--dir=".len()..];
+                    data_dir = PathBuf::from(val);
+                }
+                _ => {
+                    eprintln!("Unknown argument: {}", arg);
+                }
+            }
+        }
+    }
+
     // Setup terminal guard for proper cleanup
     let mut guard = TerminalGuard::new()?;
     let mut app = App::new().unwrap();
 
     // Load sessions asynchronously with error handling
-    if let Err(err) = app.load_sessions("demo_sessions".into()).await {
+    if let Err(err) = app.load_sessions(data_dir).await {
         app.set_error(format!("Failed to load sessions: {}", err));
     }
 
