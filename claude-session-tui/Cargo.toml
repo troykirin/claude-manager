@@ -37,6 +37,7 @@ crossterm = "0.28"
 syntect = "5.2"
 unicode-width = "0.1"
 tui-input = "0.8"
+textwrap = "0.16"
 
 [features]
 default = []

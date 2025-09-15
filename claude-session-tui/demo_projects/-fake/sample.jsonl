@@ -14,7 +14,3 @@
 {"sessionId":"550e8400-e29b-41d4-a716-446655440004","uuid":"68edc27a-2948-43f4-9065-fdfeaca3c2d5","parentUuid":"57f22148-7496-4011-b952-a997bd2f7442","timestamp":"2025-01-15T10:06:05Z","role":"assistant","content":"Querying federation documentation: memchain implementations appear in agent orchestration, persistent storage, and cognitive state management. The distributed memory system provides context across protocol handoffs."}
 {"sessionId":"550e8400-e29b-41d4-a716-446655440004","uuid":"79f2aab7-65c6-4c21-878d-87b78192b762","parentUuid":"68edc27a-2948-43f4-9065-fdfeaca3c2d5","timestamp":"2025-01-15T10:07:00Z","role":"user","content":"How does the riff CLI tool integrate with Claude sessions?"}
 {"sessionId":"550e8400-e29b-41d4-a716-446655440004","uuid":"8ae453d4-ca65-47a3-9fbe-6edb3c78f457","parentUuid":"79f2aab7-65c6-4c21-878d-87b78192b762","timestamp":"2025-01-15T10:07:05Z","role":"assistant","content":"The riff CLI provides fuzzy search over JSONL logs with UUID extraction. Intent enhancement expands queries semantically. The tool integrates via MCP proxy for agentic search enhancement across Claude conversation data."}
-</jsonl>```
-<file_path>
-claude-session-tui/demo_sessions/sample.jsonl
-</file_path>

@@ -1,26 +1,48 @@
 //! Minimal App implementation to get the TUI running.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Line,
+    text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, Paragraph},
+    Frame,
 };
 
 use crate::{models::Session, parse_session_directory};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use std::collections::HashSet;
+use textwrap;
 
 /// Application struct with fuzzy search support
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ViewMode {
+    Summary,
+    FullJson,
+    SnippetBrowser,
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchMatch {
+    pub session_index: usize,
+    pub block_index: usize,
+    pub score: i64,
+    pub snippet: String,
+    pub full_json: String,
+}
+
 pub struct App {
     sessions: Vec<Session>,
-    filtered_sessions: Vec<Session>, // Filtered search results
+    filtered_sessions: Vec<Session>,  // Filtered search results
+    search_matches: Vec<SearchMatch>, // Detailed matches with snippets
     selected: usize,
+    snippet_index: usize, // For snippet browsing
+    snippet_scroll_offset: usize,
     search_query: String, // Current search input
-    is_searching: bool,   // UI mode flag for search
+    is_searching: bool,   // UI mode flag
+    view_mode: ViewMode,  // View mode for details pane
     error_message: Option<String>,
     should_quit: bool,
 }
@@ -31,9 +53,13 @@ impl App {
         Ok(Self {
             sessions: Vec::new(),
             filtered_sessions: Vec::new(),
+            search_matches: Vec::new(),
             selected: 0,
+            snippet_index: 0,
+            snippet_scroll_offset: 0,
             search_query: String::new(),
             is_searching: false,
+            view_mode: ViewMode::Summary,
             error_message: None,
             should_quit: false,
         })
@@ -54,7 +80,12 @@ impl App {
     }
 
     /// Render the UI
-    pub fn render(&mut self, frame: &mut ratatui::Frame) {
+    pub fn render(&mut self, frame: &mut Frame) {
+        // Update help text based on view mode
+        let help_text = match self.view_mode {
+            ViewMode::SnippetBrowser => "n/p:navigate  ↑↓:scroll  v:exit  q:quit",
+            _ => "Keys: / search  v toggle view  j/k/↑/↓ navigate  q quit",
+        };
         let size = frame.area();
 
         // New layout: search bar at top, main content below
@@ -113,37 +144,103 @@ impl App {
             );
         frame.render_stateful_widget(sessions_list, main_chunks[0], &mut state);
 
-        // Right pane: always show status info like ratatui-demo
-        let selected_session_name = self
-            .filtered_sessions
-            .get(self.selected)
-            .map(|s| s.metadata.file_path.clone())
-            .unwrap_or_else(|| "None".to_string());
-
-        let status_text = if self.is_searching {
-            "Searching".to_string()
-        } else if let Some(err) = &self.error_message {
-            format!("Error: {}", err)
-        } else {
-            "Ready".to_string()
+        // Right pane: status, full JSON, or snippet browser
+        let right_area = main_chunks[1];
+        let right_title = match self.view_mode {
+            ViewMode::Summary => "Status",
+            ViewMode::FullJson => "Full JSON",
+            ViewMode::SnippetBrowser => "Snippet Browser",
         };
 
-        let right_content = vec![
-            Line::from(format!("Total Sessions: {}", self.sessions.len())),
-            Line::from(format!("Filtered: {}", self.filtered_sessions.len())),
-            Line::from(format!(
-                "Selected: {} ({})",
-                self.selected + 1,
-                selected_session_name
-            )),
-            Line::from(format!("Status: {}", status_text)),
-            Line::from(""),
-            Line::from("Keys: / search  j/k/↑/↓ navigate  q quit"),
-        ];
+        match self.view_mode {
+            ViewMode::Summary => {
+                let selected_session_name = self
+                    .filtered_sessions
+                    .get(self.selected)
+                    .map(|s| s.metadata.file_path.clone())
+                    .unwrap_or_else(|| "None".to_string());
 
-        let details = Paragraph::new(right_content)
-            .block(Block::default().title("Status").borders(Borders::ALL));
-        frame.render_widget(details, main_chunks[1]);
+                let status_text = if self.is_searching {
+                    "Searching".to_string()
+                } else if let Some(err) = &self.error_message {
+                    format!("Error: {}", err)
+                } else {
+                    "Ready".to_string()
+                };
+
+                let right_content = vec![
+                    Line::from(format!("Total Sessions: {}", self.sessions.len())),
+                    Line::from(format!("Filtered: {}", self.filtered_sessions.len())),
+                    Line::from(format!(
+                        "Selected: {} ({})",
+                        self.selected + 1,
+                        selected_session_name
+                    )),
+                    Line::from(format!("Status: {}", status_text)),
+                    Line::from(""),
+                    Line::from(help_text),
+                ];
+
+                let details = Paragraph::new(right_content)
+                    .block(Block::default().title(right_title).borders(Borders::ALL));
+                frame.render_widget(details, right_area);
+            }
+            ViewMode::FullJson => {
+                if let Some(match_info) = self.search_matches.get(self.snippet_index) {
+                    // Show full JSON of the matched block
+                    let json_text = match_info.full_json.clone();
+                    let json_lines: Vec<Line> = json_text
+                        .lines()
+                        .take(50) // Limit lines to fit in pane
+                        .enumerate()
+                        .map(|(i, line)| {
+                            let color = match i % 3 {
+                                0 => Color::Cyan,
+                                1 => Color::Green,
+                                _ => Color::White,
+                            };
+                            Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
+                        })
+                        .collect();
+
+                    let json_content = Text::from(json_lines);
+                    let details = Paragraph::new(json_content)
+                        .block(Block::default().title(right_title).borders(Borders::ALL))
+                        .wrap(ratatui::widgets::Wrap { trim: true });
+                    frame.render_widget(details, right_area);
+                } else if let Some(session) = self.filtered_sessions.get(self.selected) {
+                    // Fallback: Show session JSON
+                    let json_text = serde_json::to_string_pretty(&session)
+                        .unwrap_or_else(|_| "JSON error".to_string());
+                    let json_lines: Vec<Line> = json_text
+                        .lines()
+                        .take(50) // Limit lines to fit in pane
+                        .enumerate()
+                        .map(|(i, line)| {
+                            let color = match i % 3 {
+                                0 => Color::Cyan,
+                                1 => Color::Green,
+                                _ => Color::White,
+                            };
+                            Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
+                        })
+                        .collect();
+
+                    let json_content = Text::from(json_lines);
+                    let details = Paragraph::new(json_content)
+                        .block(Block::default().title(right_title).borders(Borders::ALL))
+                        .wrap(ratatui::widgets::Wrap { trim: true });
+                    frame.render_widget(details, right_area);
+                } else {
+                    let details = Paragraph::new("No data available")
+                        .block(Block::default().title(right_title).borders(Borders::ALL));
+                    frame.render_widget(details, right_area);
+                }
+            }
+            ViewMode::SnippetBrowser => {
+                self.render_snippet_browser(frame, right_area);
+            }
+        }
     }
 
     /// Handle keyboard input
@@ -172,6 +269,37 @@ impl App {
                     self.selected -= 1;
                 }
             }
+            KeyCode::Char('v') => {
+                if !self.is_searching {
+                    self.view_mode = match self.view_mode {
+                        ViewMode::Summary => ViewMode::FullJson,
+                        ViewMode::FullJson => ViewMode::SnippetBrowser,
+                        ViewMode::SnippetBrowser => ViewMode::Summary,
+                    };
+                    if self.view_mode == ViewMode::SnippetBrowser && !self.search_matches.is_empty()
+                    {
+                        self.snippet_index = 0;
+                        self.snippet_scroll_offset = 0;
+                    }
+                }
+            }
+            // Snippet browser controls
+            KeyCode::Char('n') => {
+                if self.view_mode == ViewMode::SnippetBrowser && !self.search_matches.is_empty() {
+                    self.snippet_index = (self.snippet_index + 1) % self.search_matches.len();
+                    self.snippet_scroll_offset = 0;
+                }
+            }
+            KeyCode::Char('p') => {
+                if self.view_mode == ViewMode::SnippetBrowser && !self.search_matches.is_empty() {
+                    self.snippet_index = if self.snippet_index == 0 {
+                        self.search_matches.len() - 1
+                    } else {
+                        self.snippet_index - 1
+                    };
+                    self.snippet_scroll_offset = 0;
+                }
+            }
             KeyCode::Char('/') => {
                 self.is_searching = true;
                 self.search_query.clear();
@@ -193,12 +321,16 @@ impl App {
                 }
             }
             KeyCode::Up => {
-                if !self.is_searching && self.selected > 0 {
+                if self.view_mode == ViewMode::SnippetBrowser {
+                    self.scroll_snippet(-1);
+                } else if !self.is_searching && self.selected > 0 {
                     self.selected -= 1;
                 }
             }
             KeyCode::Down => {
-                if !self.is_searching && self.selected + 1 < self.filtered_sessions.len() {
+                if self.view_mode == ViewMode::SnippetBrowser {
+                    self.scroll_snippet(1);
+                } else if !self.is_searching && self.selected + 1 < self.filtered_sessions.len() {
                     self.selected += 1;
                 }
             }
@@ -633,6 +765,7 @@ impl App {
     pub fn search_sessions(&mut self) {
         if self.search_query.is_empty() {
             self.filtered_sessions = self.sessions.clone();
+            self.search_matches.clear();
             return;
         }
 
@@ -641,43 +774,191 @@ impl App {
 
         let matcher = SkimMatcherV2::default();
         let mut scored_sessions = Vec::new();
+        let mut search_matches = Vec::new();
 
-        for session in &self.sessions {
-            let content = format!(
-                "{} {}",
-                session.metadata.file_path,
-                session
-                    .blocks
-                    .iter()
-                    .map(|b| b.content.raw_text.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            );
+        for (session_idx, session) in self.sessions.iter().enumerate() {
+            let mut session_has_matches = false;
+            let mut session_max_score = 0;
 
-            // Search with expanded keywords
-            let mut max_score = None;
-            for query in &expanded_queries {
-                if let Some(score) = matcher.fuzzy_match(&content, query) {
-                    if max_score.is_none() || score > max_score.unwrap() {
-                        max_score = Some(score);
+            for (block_idx, block) in session.blocks.iter().enumerate() {
+                let content = format!("{} {}", session.metadata.file_path, block.content.raw_text);
+
+                // Search with expanded keywords
+                let mut max_score = None;
+                for query in &expanded_queries {
+                    if let Some(score) = matcher.fuzzy_match(&content, query) {
+                        if max_score.is_none() || score > max_score.unwrap() {
+                            max_score = Some(score);
+                        }
                     }
+                }
+
+                if let Some(score) = max_score {
+                    session_has_matches = true;
+                    if score > session_max_score {
+                        session_max_score = score;
+                    }
+
+                    // Create snippet for this block
+                    let snippet =
+                        self.create_snippet(&block.content.raw_text, &self.search_query, 150);
+
+                    // Full JSON for this block
+                    let full_json = serde_json::to_string_pretty(&block)
+                        .unwrap_or_else(|_| "JSON error".to_string());
+
+                    search_matches.push(SearchMatch {
+                        session_index: session_idx,
+                        block_index: block_idx,
+                        score: score as i64,
+                        snippet,
+                        full_json,
+                    });
                 }
             }
 
-            if let Some(score) = max_score {
-                scored_sessions.push((session.clone(), score));
+            if session_has_matches {
+                scored_sessions.push((session.clone(), session_max_score));
             }
         }
 
-        // Sort by score (highest first) and limit results
+        // Sort sessions by score (highest first)
         scored_sessions.sort_by(|a, b| b.1.cmp(&a.1));
         self.filtered_sessions = scored_sessions
             .into_iter()
-            .take(50) // Limit for performance
+            .take(50)
             .map(|(s, _)| s)
             .collect();
 
+        // Sort matches by score and limit
+        search_matches.sort_by(|a, b| b.score.cmp(&a.score));
+        search_matches.truncate(100); // Limit matches
+        self.search_matches = search_matches;
+
         self.selected = 0; // Reset selection
+    }
+
+    fn create_snippet(&self, text: &str, query: &str, max_length: usize) -> String {
+        let text_lower = text.to_lowercase();
+        let query_lower = query.to_lowercase();
+
+        // Find the first occurrence of query or query words
+        let mut match_pos = text_lower.find(&query_lower).unwrap_or(0);
+        if match_pos == 0 {
+            for word in query.split_whitespace() {
+                if let Some(pos) = text_lower.find(&word.to_lowercase()) {
+                    match_pos = pos;
+                    break;
+                }
+            }
+        }
+
+        // Extract context around match
+        let start = if match_pos > 50 { match_pos - 50 } else { 0 };
+        let end = if match_pos + 100 < text.len() {
+            match_pos + 100
+        } else {
+            text.len()
+        };
+
+        let snippet = text[start..end].to_string();
+        if snippet.len() > max_length {
+            format!("...{}...", &snippet[..max_length])
+        } else {
+            snippet
+        }
+    }
+
+    fn render_snippet_browser(&self, frame: &mut Frame, area: Rect) {
+        if self.search_matches.is_empty() {
+            let content = Paragraph::new("No matches found").block(
+                Block::default()
+                    .title("Snippet Browser")
+                    .borders(Borders::ALL),
+            );
+            frame.render_widget(content, area);
+            return;
+        }
+
+        let match_info = &self.search_matches[self.snippet_index];
+        let header_text = format!(
+            "Match {}/{} (Score: {}) - Session {} Block {}",
+            self.snippet_index + 1,
+            self.search_matches.len(),
+            match_info.score,
+            match_info.session_index + 1,
+            match_info.block_index + 1
+        );
+
+        // Wrap snippet text for display
+        let wrapped_lines: Vec<String> = match_info
+            .snippet
+            .split('\n')
+            .flat_map(|line| textwrap::wrap(line, 60).into_iter().map(|s| s.to_string()))
+            .collect();
+
+        let total_lines = wrapped_lines.len();
+        let max_display_lines = 15;
+        let start_line = self.snippet_scroll_offset;
+        let end_line = (start_line + max_display_lines).min(total_lines);
+        let display_lines = &wrapped_lines[start_line..end_line];
+
+        let snippet_display = display_lines
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        let scroll_info = if total_lines > max_display_lines {
+            format!(
+                " | Showing lines {}-{} of {} (↑↓ scroll, n/p navigate, v full, q exit)",
+                start_line + 1,
+                end_line,
+                total_lines
+            )
+        } else {
+            " | n/p navigate, v view full, q exit".to_string()
+        };
+
+        let full_content = format!(
+            "{}\n{}{}\n\n{}",
+            header_text,
+            "─".repeat(60),
+            snippet_display,
+            scroll_info
+        );
+
+        let content = Paragraph::new(full_content)
+            .block(
+                Block::default()
+                    .title("Snippet Browser")
+                    .borders(Borders::ALL),
+            )
+            .wrap(ratatui::widgets::Wrap { trim: true });
+        frame.render_widget(content, area);
+    }
+
+    pub fn scroll_snippet(&mut self, delta: i32) {
+        if self.view_mode != ViewMode::SnippetBrowser || self.search_matches.is_empty() {
+            return;
+        }
+
+        let match_info = &self.search_matches[self.snippet_index];
+        let total_lines = match_info
+            .snippet
+            .split('\n')
+            .map(|line| textwrap::wrap(line, 60).len())
+            .sum::<usize>();
+
+        let max_display_lines = 15;
+        let max_scroll = if total_lines > max_display_lines {
+            total_lines - max_display_lines
+        } else {
+            0
+        };
+
+        self.snippet_scroll_offset =
+            ((self.snippet_scroll_offset as i32 + delta).max(0) as usize).min(max_scroll);
     }
 }
 
