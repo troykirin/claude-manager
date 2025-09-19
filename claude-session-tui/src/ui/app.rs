@@ -96,10 +96,19 @@ impl App {
             .constraints([Constraint::Length(3), Constraint::Min(0)])
             .split(size);
 
-        // Search bar at top
+        // Search bar at top with match count
         let search_bar = if self.is_searching {
             Paragraph::new(format!("Search: {}", self.search_query))
+                .block(Block::default().borders(Borders::ALL).title("Search (Enter to apply)"))
+        } else if !self.search_matches.is_empty() {
+            let title = format!("Search - {} matches found (press 'v' to browse snippets)", self.search_matches.len());
+            Paragraph::new(format!("Query: {}", self.search_query))
+                .block(Block::default().borders(Borders::ALL).title(title))
+                .style(Style::default().fg(Color::Green))
+        } else if !self.search_query.is_empty() {
+            Paragraph::new(format!("No matches for: {}", self.search_query))
                 .block(Block::default().borders(Borders::ALL).title("Search"))
+                .style(Style::default().fg(Color::Yellow))
         } else {
             Paragraph::new("Press '/' to search")
                 .block(Block::default().borders(Borders::ALL).title("Search"))
@@ -176,7 +185,7 @@ impl App {
                     "Ready".to_string()
                 };
 
-                let right_content = vec![
+                let mut right_content = vec![
                     Line::from(format!("Total Sessions: {}", self.sessions.len())),
                     Line::from(format!("Filtered: {}", self.filtered_sessions.len())),
                     Line::from(format!(
@@ -186,8 +195,41 @@ impl App {
                     )),
                     Line::from(format!("Status: {}", status_text)),
                     Line::from(""),
-                    Line::from(help_text),
                 ];
+
+                // Show first match snippet if available
+                if !self.search_matches.is_empty() {
+                    right_content.push(Line::from("─────────────────────────────────────"));
+                    right_content.push(Line::from(format!("First match (of {}):", self.search_matches.len())));
+                    right_content.push(Line::from(""));
+                    
+                    let first_match = &self.search_matches[0];
+                    // Wrap the snippet text for display
+                    let snippet_lines: Vec<String> = first_match.snippet
+                        .split('\n')
+                        .flat_map(|line| {
+                            textwrap::wrap(line, 50)
+                                .into_iter()
+                                .map(|s| s.to_string())
+                        })
+                        .take(8) // Limit lines in summary
+                        .collect();
+                    
+                    for line in snippet_lines {
+                        right_content.push(Line::from(Span::styled(
+                            line,
+                            Style::default().fg(Color::Cyan)
+                        )));
+                    }
+                    
+                    right_content.push(Line::from(""));
+                    right_content.push(Line::from(Span::styled(
+                        "Press 'v' to browse all snippets",
+                        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                    )));
+                } else {
+                    right_content.push(Line::from(help_text));
+                }
 
                 let details = Paragraph::new(right_content)
                     .block(Block::default().title(right_title).borders(Borders::ALL));
@@ -786,9 +828,19 @@ impl App {
 
     /// Perform fuzzy search on sessions and blocks
     pub fn search_sessions(&mut self) {
+        // Clear search if query is empty
         if self.search_query.is_empty() {
             self.filtered_sessions = self.sessions.clone();
             self.search_matches.clear();
+            self.selected = 0;
+            return;
+        }
+
+        // Handle case where no sessions are loaded
+        if self.sessions.is_empty() {
+            self.filtered_sessions.clear();
+            self.search_matches.clear();
+            self.selected = 0;
             return;
         }
 
@@ -799,19 +851,38 @@ impl App {
         let mut scored_sessions = Vec::new();
         let mut search_matches = Vec::new();
 
+        // Also do case-insensitive substring matching for better results
+        let query_lower = self.search_query.to_lowercase();
+
         for (session_idx, session) in self.sessions.iter().enumerate() {
             let mut session_has_matches = false;
             let mut session_max_score = 0;
 
             for (block_idx, block) in session.blocks.iter().enumerate() {
                 let content = format!("{} {}", session.metadata.file_path, block.content.raw_text);
+                let content_lower = content.to_lowercase();
 
-                // Search with expanded keywords
-                let mut max_score = None;
+                // First, check for direct substring match (higher priority)
+                let has_direct_match = content_lower.contains(&query_lower);
+                
+                // Search with expanded keywords using fuzzy matcher
+                let mut max_score = if has_direct_match { Some(1000) } else { None };
+                
                 for query in &expanded_queries {
                     if let Some(score) = matcher.fuzzy_match(&content, query) {
-                        if max_score.is_none() || score > max_score.unwrap() {
-                            max_score = Some(score);
+                        let adjusted_score = if has_direct_match { score + 1000 } else { score };
+                        if max_score.is_none() || adjusted_score > max_score.unwrap() {
+                            max_score = Some(adjusted_score);
+                        }
+                    }
+                }
+
+                // Also check for substring matches on individual words
+                if max_score.is_none() {
+                    for word in self.search_query.split_whitespace() {
+                        if content_lower.contains(&word.to_lowercase()) {
+                            max_score = Some(500); // Give a moderate score for word matches
+                            break;
                         }
                     }
                 }
@@ -822,9 +893,9 @@ impl App {
                         session_max_score = score;
                     }
 
-                    // Create snippet for this block
+                    // Create a better snippet for this block with more context
                     let snippet =
-                        self.create_snippet(&block.content.raw_text, &self.search_query, 150);
+                        self.create_snippet(&block.content.raw_text, &self.search_query, 300);
 
                     // Full JSON for this block
                     let full_json = serde_json::to_string_pretty(&block)
@@ -847,6 +918,10 @@ impl App {
 
         // Sort sessions by score (highest first)
         scored_sessions.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        // Store whether we have any matches before moving scored_sessions
+        let has_matches = !scored_sessions.is_empty();
+        
         self.filtered_sessions = scored_sessions
             .into_iter()
             .take(50)
@@ -855,41 +930,153 @@ impl App {
 
         // Sort matches by score and limit
         search_matches.sort_by(|a, b| b.score.cmp(&a.score));
-        search_matches.truncate(100); // Limit matches
+        search_matches.truncate(200); // Increase limit for more matches
         self.search_matches = search_matches;
 
-        self.selected = 0; // Reset selection
+        // Reset selection and ensure it's within bounds
+        self.selected = 0;
+        self.snippet_index = 0;
+        self.snippet_scroll_offset = 0;
+        
+        // If no sessions matched, show all sessions (no filter)
+        if self.filtered_sessions.is_empty() && has_matches {
+            // Fall back to showing all sessions if something went wrong
+            self.filtered_sessions = self.sessions.clone();
+        }
     }
 
     fn create_snippet(&self, text: &str, query: &str, max_length: usize) -> String {
+        // Handle empty text or query
+        if text.is_empty() {
+            return String::from("[Empty content]");
+        }
+        if query.is_empty() {
+            let preview_len = text.len().min(max_length);
+            return text[..preview_len].to_string();
+        }
+
         let text_lower = text.to_lowercase();
         let query_lower = query.to_lowercase();
 
-        // Find the first occurrence of query or query words
-        let mut match_pos = text_lower.find(&query_lower).unwrap_or(0);
-        if match_pos == 0 {
+        // Find the best match position
+        let mut match_pos = None;
+        
+        // First try exact phrase match
+        if let Some(pos) = text_lower.find(&query_lower) {
+            match_pos = Some(pos);
+        }
+        
+        // If no exact match, try to find the first word
+        if match_pos.is_none() {
             for word in query.split_whitespace() {
-                if let Some(pos) = text_lower.find(&word.to_lowercase()) {
-                    match_pos = pos;
-                    break;
+                if !word.is_empty() {
+                    if let Some(pos) = text_lower.find(&word.to_lowercase()) {
+                        match_pos = Some(pos);
+                        break;
+                    }
                 }
             }
         }
-
-        // Extract context around match
-        let start = if match_pos > 50 { match_pos - 50 } else { 0 };
-        let end = if match_pos + 100 < text.len() {
-            match_pos + 100
+        
+        // Default to beginning if no match found
+        let pos = match_pos.unwrap_or(0);
+        
+        // Calculate context window around the match
+        let context_before = 100; // characters before match
+        let context_after = 200;  // characters after match
+        
+        // Safely calculate start position with bounds checking
+        let start = if pos > context_before && pos < text.len() { 
+            // Try to start at a word boundary
+            let mut s = pos.saturating_sub(context_before);
+            // Use char_indices for safe UTF-8 boundary iteration
+            let chars: Vec<_> = text.char_indices().collect();
+            while s > 0 {
+                let is_boundary = chars.iter()
+                    .find(|(i, _)| *i == s)
+                    .map(|(_, c)| c.is_whitespace())
+                    .unwrap_or(false);
+                if is_boundary {
+                    break;
+                }
+                s = s.saturating_sub(1);
+            }
+            s
+        } else { 
+            0 
+        };
+        
+        // Safely calculate end position
+        let end = if pos + context_after < text.len() {
+            // Try to end at a word boundary
+            let mut e = (pos + context_after).min(text.len());
+            let chars: Vec<_> = text.char_indices().collect();
+            while e < text.len() {
+                let is_boundary = chars.iter()
+                    .find(|(i, _)| *i == e)
+                    .map(|(_, c)| c.is_whitespace())
+                    .unwrap_or(true);
+                if is_boundary {
+                    break;
+                }
+                e = (e + 1).min(text.len());
+            }
+            e
         } else {
             text.len()
         };
 
-        let snippet = text[start..end].to_string();
-        if snippet.len() > max_length {
-            format!("...{}...", &snippet[..max_length])
+        // Ensure we're at valid UTF-8 boundaries using is_char_boundary
+        let safe_start = if text.is_char_boundary(start) {
+            start
         } else {
-            snippet
+            // Find the nearest valid boundary before start
+            (0..start).rev().find(|i| text.is_char_boundary(*i)).unwrap_or(0)
+        };
+        
+        let safe_end = if text.is_char_boundary(end) {
+            end
+        } else {
+            // Find the nearest valid boundary after end
+            (end..=text.len()).find(|i| text.is_char_boundary(*i)).unwrap_or(text.len())
+        };
+
+        // Extract the snippet safely
+        let mut snippet = text[safe_start..safe_end].to_string();
+        
+        // Add ellipsis if truncated
+        if safe_start > 0 {
+            snippet = format!("...{}", snippet.trim_start());
         }
+        if safe_end < text.len() {
+            snippet = format!("{}...", snippet.trim_end());
+        }
+        
+        // Highlight the match in the snippet (simple uppercase for now)
+        if let Some(match_idx) = snippet.to_lowercase().find(&query_lower) {
+            // Ensure we don't go out of bounds when highlighting
+            let match_end = (match_idx + query_lower.len()).min(snippet.len());
+            if match_end <= snippet.len() {
+                let before = &snippet[..match_idx];
+                let matched = &snippet[match_idx..match_end];
+                let after = &snippet[match_end..];
+                snippet = format!("{}[{}]{}", before, matched.to_uppercase(), after);
+            }
+        }
+        
+        // Ensure snippet doesn't exceed max length
+        if snippet.len() > max_length {
+            // Find a valid char boundary for truncation
+            let truncate_pos = if snippet.is_char_boundary(max_length) {
+                max_length
+            } else {
+                (0..max_length).rev().find(|i| snippet.is_char_boundary(*i)).unwrap_or(0)
+            };
+            snippet.truncate(truncate_pos);
+            snippet.push_str("...");
+        }
+        
+        snippet
     }
 
     fn render_snippet_browser(&self, frame: &mut Frame, area: Rect) {

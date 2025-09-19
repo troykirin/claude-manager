@@ -71,9 +71,9 @@ impl SessionParser {
             performance_threshold_ms: 5000, // 5 seconds
             error_recovery: ErrorRecoverySettings {
                 skip_malformed_lines: true,
-                max_consecutive_errors: 10,
-                continue_on_critical_errors: false,
-                detailed_error_reporting: true,
+                max_consecutive_errors: 50,  // Increased tolerance
+                continue_on_critical_errors: true,  // Continue even on critical errors
+                detailed_error_reporting: false,  // Reduce noise in logs
             },
             extraction_config: ExtractionConfig {
                 extract_code_blocks: true,
@@ -185,7 +185,10 @@ impl SessionParser {
                     }
 
                     if self.error_recovery.skip_malformed_lines {
-                        warn!("Skipping malformed line {}: {}", line_number, e);
+                        // Only log if detailed reporting is enabled
+                        if self.error_recovery.detailed_error_reporting {
+                            warn!("Skipping malformed line {}: {}", line_number, e);
+                        }
                         continue;
                     } else {
                         return Err(e);
@@ -224,25 +227,70 @@ impl SessionParser {
         Ok(session)
     }
 
-    /// Parse multiple files in parallel
+    /// Parse multiple files in parallel with smart error detection
     pub async fn parse_files<P: AsRef<Path> + Send + 'static>(
         &self,
         paths: Vec<P>,
     ) -> Result<Vec<Session>> {
         let start_time = Instant::now();
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_files));
+        let total_files = paths.len();
 
-        info!("Starting parallel parsing of {} files", paths.len());
+        info!("Starting parallel parsing of {} files", total_files);
+
+        // Track progress and errors for smart abort
+        let completed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let failed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let consecutive_errors = Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
         let tasks: Vec<JoinHandle<Result<Session>>> = paths
             .into_iter()
-            .map(|path| {
+            .enumerate()
+            .map(|(index, path)| {
                 let parser = self.clone_config();
                 let permit = semaphore.clone();
+                let completed = completed.clone();
+                let failed = failed.clone();
+                let consecutive_errors = consecutive_errors.clone();
+                let file_number = index + 1;
 
                 tokio::spawn(async move {
                     let _permit = permit.acquire().await.unwrap();
-                    parser.parse_file(path).await
+                    
+                    // Add timeout for file processing (30 seconds)
+                    let timeout_duration = tokio::time::Duration::from_secs(30);
+                    let parse_future = parser.parse_file(path);
+                    
+                    match tokio::time::timeout(timeout_duration, parse_future).await {
+                        Ok(Ok(session)) => {
+                            completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            consecutive_errors.store(0, std::sync::atomic::Ordering::Relaxed);
+                            // Reduced logging - only log failures or every 10th success
+                            if file_number % 10 == 0 {
+                                info!("Progress: {} files parsed", file_number);
+                            }
+                            Ok(session)
+                        }
+                        Ok(Err(e)) => {
+                            failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            let consec = consecutive_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                            // Only log if it's becoming a pattern
+                            if consec > 3 {
+                                warn!("Multiple consecutive failures: {}", consec);
+                            }
+                            Err(e)
+                        }
+                        Err(_) => {
+                            failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            let consec = consecutive_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                            warn!("⏰ File {} timed out after 30s (consecutive errors: {})", file_number, consec);
+                            Err(ClaudeSessionError::PerformanceThreshold {
+                                operation: format!("parse_file_{}", file_number),
+                                duration_ms: 30000,
+                                limit_ms: 30000,
+                            })
+                        }
+                    }
                 })
             })
             .collect();
@@ -253,23 +301,59 @@ impl SessionParser {
 
         let mut sessions = Vec::new();
         let mut errors = 0;
+        let mut _consecutive_error_count = 0;
 
-        for result in results {
+        for (index, result) in results.into_iter().enumerate() {
+            let file_number = index + 1;
+            
+            // Check for smart abort conditions
+            let current_failed = failed.load(std::sync::atomic::Ordering::Relaxed);
+            let current_completed = completed.load(std::sync::atomic::Ordering::Relaxed);
+            let total_processed = current_failed + current_completed;
+            
+            // Calculate error rate
+            let error_rate = if total_processed > 0 {
+                (current_failed as f64) / (total_processed as f64)
+            } else {
+                0.0
+            };
+            
+            // Check consecutive errors
+            let current_consecutive = consecutive_errors.load(std::sync::atomic::Ordering::Relaxed);
+            
+            // Smart abort conditions - disabled for now to be more permissive
+            // Only abort if we have 100% failure rate after processing many files
+            if total_processed >= 20 && error_rate >= 0.95 {
+                error!("Aborting: Error rate {:.1}% after {} files", error_rate * 100.0, total_processed);
+                return Err(ClaudeSessionError::MultipleParsing {
+                    count: current_failed,
+                });
+            }
+
             match result {
-                Ok(session) => sessions.push(session),
+                Ok(session) => {
+                    _consecutive_error_count = 0;
+                    sessions.push(session);
+                    // Reduce log spam - only log every 10th file
+                    if file_number % 10 == 0 {
+                        info!("Progress: {}/{} files processed", total_processed, total_files);
+                    }
+                }
                 Err(e) => {
                     errors += 1;
+                    _consecutive_error_count += 1;
+                    
                     if !self.error_recovery.continue_on_critical_errors {
                         return Err(e);
                     }
-                    error!("Failed to parse file: {}", e);
+                    error!("Failed to parse file {}: {}", file_number, e);
                 }
             }
         }
 
         let duration = start_time.elapsed();
         info!(
-            "Parallel parsing completed: {} successful, {} errors in {}ms",
+            "✨ Parallel parsing completed: {} successful, {} errors in {}ms",
             sessions.len(),
             errors,
             duration.as_millis()
@@ -712,9 +796,9 @@ struct MessageObject {
 struct RawMessage {
     pub uuid: String,
     pub timestamp: String,
-    #[serde(default)]
+    #[serde(default, alias = "parentUuid")]
     pub parent_uuid: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "sessionId")]
     pub session_id: Option<String>,
     // Message field may not exist for system messages
     pub message: Option<MessageObject>,
@@ -725,6 +809,17 @@ struct RawMessage {
     pub content: Option<serde_json::Value>,
     #[serde(default)]
     pub r#type: Option<String>,
+    // Additional fields from actual Claude format
+    #[serde(default, alias = "isSidechain")]
+    pub is_sidechain: Option<bool>,
+    #[serde(default, alias = "userType")]
+    pub user_type: Option<String>,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default, alias = "gitBranch")]
+    pub git_branch: Option<String>,
     #[serde(default)]
     pub tools: serde_json::Value,
     #[serde(default)]
