@@ -534,6 +534,61 @@ PY
     echo "$base_dir/$input_path"
 }
 
+# Find Claude projects with priority: name-based first, then session-based
+_find_projects_prioritized() {
+    local source_path="$1"
+    local priority_matches=()
+    local session_matches=()
+    
+    # Priority 1: Check if there's a project that matches the directory structure
+    local expected_project
+    expected_project=$(_suggest_project_dir_for "$source_path")
+    if [[ -d "$expected_project" ]]; then
+        priority_matches+=("$expected_project")
+    fi
+    
+    # Priority 2: Find projects containing sessions with this path
+    local temp_matches
+    temp_matches=$(timeout 10 find "$CLAUDE_DIR/projects" -name "*.jsonl" -type f -exec grep -l "\"cwd\":\"$source_path\"" {} \; 2>/dev/null | head -5 || true)
+    
+    if [[ -n "$temp_matches" ]]; then
+        while IFS= read -r session_file; do
+            local project_dir
+            project_dir=$(dirname "$session_file")
+            # Skip if already in priority matches
+            local in_priority=false
+            for p in "${priority_matches[@]}"; do
+                if [[ "$p" == "$project_dir" ]]; then
+                    in_priority=true
+                    break
+                fi
+            done
+            
+            if [[ "$in_priority" == false ]]; then
+                # Add to session matches if not already there
+                local already_added=false
+                for m in "${session_matches[@]}"; do
+                    if [[ "$m" == "$project_dir" ]]; then
+                        already_added=true
+                        break
+                    fi
+                done
+                if [[ "$already_added" == false ]]; then
+                    session_matches+=("$project_dir")
+                fi
+            fi
+        done <<< "$temp_matches"
+    fi
+    
+    # Return priority matches first, then session matches
+    for p in "${priority_matches[@]}"; do
+        echo "$p"
+    done
+    for s in "${session_matches[@]}"; do
+        echo "$s"
+    done
+}
+
 # Find Claude project directories that contain sessions referencing a given source path
 _find_projects_by_session_path() {
     local source_path="$1"
@@ -965,10 +1020,10 @@ claude_manager() {
             fi
             new_path=$(_resolve_absolute_path "$cwd" "$new_path_input")
 
-            # Auto-detect Claude project(s) referencing this old_path
+            # Auto-detect Claude project(s) referencing this old_path (prioritized)
             while IFS= read -r p; do
                 project_candidates+=("$p")
-            done < <(_find_projects_by_session_path "$old_path")
+            done < <(_find_projects_prioritized "$old_path")
 
             if [[ ${#project_candidates[@]} -eq 0 ]]; then
                 _log_warn "No Claude projects directly reference: $old_path"
