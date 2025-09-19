@@ -31,7 +31,11 @@ _log_info() { _log "INFO" "$1" "$BLUE"; }
 _log_warn() { _log "WARN" "$1" "$YELLOW"; }
 _log_error() { _log "ERROR" "$1" "$RED"; }
 _log_success() { _log "SUCCESS" "$1" "$GREEN"; }
-_log_debug() { _log "DEBUG" "$1" "$PURPLE"; }
+_log_debug() { 
+    if [[ "$CLAUDE_DEBUG" == "1" ]]; then
+        _log "DEBUG" "$1" "$PURPLE" >&2
+    fi
+}
 
 # Save undo information
 _save_undo_info() {
@@ -533,7 +537,7 @@ _find_projects_by_session_path() {
     # Faster approach: limit search time and results
     local temp_matches
     # Use timeout to prevent hanging on large searches
-    temp_matches=$(timeout 3 find "$CLAUDE_DIR/projects" -name "*.jsonl" -type f -exec grep -l "\"cwd\":\"$source_path\"" {} \; 2>/dev/null | head -5 || true)
+    temp_matches=$(timeout 10 find "$CLAUDE_DIR/projects" -name "*.jsonl" -type f -exec grep -l "\"cwd\":\"$source_path\"" {} \; 2>/dev/null | head -5 || true)
     
     if [[ -n "$temp_matches" ]]; then
         while IFS= read -r session_file; do
@@ -561,6 +565,9 @@ _find_projects_by_session_path() {
 # Suggest a Claude project directory path for a given new source path
 _suggest_project_dir_for() {
     local new_path="$1"
+    
+    # Expand ~ to full home path
+    new_path="${new_path/#\~/$HOME}"
     
     # Convert absolute path to Claude Code project naming convention
     # Claude uses double dashes for dots in paths and single dash for path separators
@@ -742,6 +749,9 @@ claude_manager() {
                             local file_occurrences
                             # Simplified grep pattern for better performance
                             file_occurrences=$(grep -c "\"cwd\":\"$old_path\"" "$session_file" 2>/dev/null || echo 0)
+                            # Ensure we have a clean integer (strip any whitespace/newlines)
+                            file_occurrences="${file_occurrences//[^0-9]/}"
+                            [[ -z "$file_occurrences" ]] && file_occurrences=0
                             if [[ "$file_occurrences" -gt 0 ]]; then
                                 session_count=$((session_count + 1))
                                 occurrence_count=$((occurrence_count + file_occurrences))
@@ -1000,14 +1010,10 @@ claude_manager() {
                 fi
             fi
 
-            # Suggest destination Claude project directory
-            local suggested
-            suggested=$(_suggest_project_dir_for "$new_path")
-            printf "Enter destination project directory [%s]: " "$suggested"
-            read -r to_project
-            if [[ -z "$to_project" ]]; then
-                to_project="$suggested"
-            fi
+            # Auto-generate destination Claude project directory
+            local to_project
+            to_project=$(_suggest_project_dir_for "$new_path")
+            _log_info "Destination project: $(basename "$to_project")"
 
             _log_info "=== Plan ==="
             echo "  Source dir: $old_path"
