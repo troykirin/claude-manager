@@ -509,6 +509,11 @@ _resolve_absolute_path() {
         return 0
     fi
 
+    # Expand ~ to home directory
+    if [[ "$input_path" == ~* ]]; then
+        input_path="${input_path/#\~/$HOME}"
+    fi
+
     # Absolute path
     if [[ "$input_path" == /* ]]; then
         echo "$input_path"
