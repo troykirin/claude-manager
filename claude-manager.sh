@@ -41,7 +41,21 @@ _log_debug() {
 _save_undo_info() {
     local operation="$1"
     shift
-    echo "$(date '+%Y-%m-%d %H:%M:%S')|$operation|$*" > "$UNDO_FILE"
+    local timestamp
+    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+
+    {
+        printf '%s
+' "$timestamp"
+        printf '%s
+' "$operation"
+        printf '%s
+' "$#"
+        for arg in "$@"; do
+            printf '%s
+' "$arg"
+        done
+    } > "$UNDO_FILE"
     _log_info "Undo information saved to $UNDO_FILE"
 }
 
@@ -51,19 +65,60 @@ _undo_last_operation() {
         _log_error "No undo information found"
         return 1
     fi
-    
-    local undo_info
-    undo_info=$(cat "$UNDO_FILE")
-    IFS='|' read -r timestamp operation args <<< "$undo_info"
-    
+
+    mapfile -t undo_lines < "$UNDO_FILE"
+
+    if [[ ${#undo_lines[@]} -lt 3 ]]; then
+        _log_error "Undo information is corrupted: insufficient data"
+        return 1
+    fi
+
+    local timestamp="${undo_lines[0]}"
+    local operation="${undo_lines[1]}"
+    local arg_count="${undo_lines[2]}"
+
+    if [[ ! "$arg_count" =~ ^[0-9]+$ ]]; then
+        _log_error "Undo information is corrupted: invalid argument count"
+        return 1
+    fi
+
+    local expected_total=$((3 + arg_count))
+    if [[ ${#undo_lines[@]} -lt $expected_total ]]; then
+        _log_error "Undo information is corrupted: missing arguments"
+        return 1
+    fi
+
+    local args=()
+    local idx
+    for ((idx = 0; idx < arg_count; idx++)); do
+        args+=("${undo_lines[$((3 + idx))]}")
+    done
+
     _log_info "Last operation: $operation at $timestamp"
-    _log_info "Arguments: $args"
-    
+    if [[ ${#args[@]} -gt 0 ]]; then
+        local quoted=()
+        for arg in "${args[@]}"; do
+            quoted+=("'${arg}'")
+        done
+        _log_info "Arguments: ${quoted[*]}"
+    else
+        _log_info "Arguments: <none>"
+    fi
+
     case "$operation" in
         "move")
-            IFS=' ' read -r old_path new_path from_project to_project <<< "$args"
+            local old_path="${args[0]:-}"
+            local new_path="${args[1]:-}"
+            local from_project="${args[2]:-}"
+            local to_project="${args[3]:-}"
+
+            if [[ -z "$old_path" || -z "$new_path" ]]; then
+                _log_error "Undo information missing required paths"
+                return 1
+            fi
+
             _log_info "Undoing move operation..."
-            
+
             # Handle simple directory move (no project)
             if [[ "$from_project" == "none" ]]; then
                 if [[ -d "$new_path" ]]; then
@@ -74,20 +129,23 @@ _undo_last_operation() {
                 fi
             else
                 # Reverse the operations in opposite order
-                if [[ -d "$to_project" ]]; then
+                if [[ -n "$to_project" && -d "$to_project" ]]; then
                     mv "$to_project" "$from_project"
                     _log_success "Restored project: $to_project -> $from_project"
                 fi
-                
+
                 if [[ -d "$new_path" ]]; then
                     mv "$new_path" "$old_path"
                     _log_success "Restored source: $new_path -> $old_path"
+                else
+                    _log_warn "Source directory not found during undo: $new_path"
                 fi
-                
-                # Re-migrate sessions back
-                _migrate_project "$new_path" "$old_path" "$from_project"
+
+                if [[ -n "$from_project" ]]; then
+                    _migrate_project "$new_path" "$old_path" "$from_project"
+                fi
             fi
-            
+
             rm -f "$UNDO_FILE"
             _log_success "Undo completed successfully"
             ;;
@@ -147,6 +205,77 @@ _extract_session_path() {
         sed 's/.*"cwd":"\([^"]*\)".*/\1/' || return 1
 }
 
+# Count occurrences of a cwd path within a JSON/JSONL file (whitespace tolerant)
+_count_cwd_occurrences() {
+    local file="$1" target="$2"
+
+    if [[ -z "$file" || -z "$target" ]]; then
+        echo 0
+        return 0
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "ERROR:python3-missing"
+        return 0
+    fi
+
+    python3 - "$file" "$target" <<'PYHELP'
+import sys
+import re
+from pathlib import Path
+
+file_path, target = sys.argv[1], sys.argv[2]
+pattern = re.compile(r'\"cwd\"\s*:\s*\"' + re.escape(target) + r'\"')
+try:
+    text = Path(file_path).read_text(encoding='utf-8')
+except Exception as exc:  # pragma: no cover - surfaced via shell logging
+    print(f"ERROR:{exc}")
+    sys.exit(0)
+print(len(pattern.findall(text)))
+PYHELP
+}
+
+# Replace cwd path occurrences within a JSON/JSONL file (whitespace tolerant)
+_replace_cwd_path() {
+    local file="$1" old_path="$2" new_path="$3"
+
+    if [[ -z "$file" || -z "$old_path" || -z "$new_path" ]]; then
+        echo 0
+        return 0
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "ERROR:python3-missing"
+        return 0
+    fi
+
+    python3 - "$file" "$old_path" "$new_path" <<'PYHELP'
+import sys
+import re
+from pathlib import Path
+
+file_path, old_path, new_path = sys.argv[1], sys.argv[2], sys.argv[3]
+pattern = re.compile(r'\"cwd\"\s*:\s*\"' + re.escape(old_path) + r'\"')
+
+try:
+    text = Path(file_path).read_text(encoding='utf-8')
+except Exception as exc:  # pragma: no cover - surfaced via shell logging
+    print(f"ERROR:read:{exc}")
+    sys.exit(0)
+
+updated, replacements = pattern.subn(f'\"cwd\":\"{new_path}\"', text)
+
+if replacements:
+    try:
+        Path(file_path).write_text(updated, encoding='utf-8')
+    except Exception as exc:  # pragma: no cover
+        print(f"ERROR:write:{exc}")
+        sys.exit(0)
+
+print(replacements)
+PYHELP
+}
+
 # Backup a file
 _backup_file() {
     local file="$1"
@@ -184,11 +313,29 @@ _migrate_project() {
 
     _log_info "Starting migration from '$old_path' to '$new_path'"
 
-    # Find all sessions with the old path
+    MIGRATION_LAST_UPDATED_FILES=0
+    MIGRATION_LAST_TOTAL_CHANGES=0
+
+    if [[ -z "$project_dir" || ! -d "$project_dir" ]]; then
+        _log_error "Project directory not found: $project_dir"
+        return 1
+    fi
+
     local sessions=()
+    local session_counts=()
+
     while IFS= read -r session; do
-        if grep -q "\"cwd\":\"$old_path\"" "$session" 2>/dev/null; then
+        local count_raw
+        count_raw=$(_count_cwd_occurrences "$session" "$old_path")
+        count_raw=$(printf '%s' "$count_raw" | tr -d '
+')
+        if [[ "$count_raw" == ERROR:* ]]; then
+            _log_warn "Skipping $(basename "$session") due to read error: ${count_raw#ERROR:}"
+            continue
+        fi
+        if [[ "$count_raw" =~ ^[0-9]+$ ]] && (( count_raw > 0 )); then
             sessions+=("$session")
+            session_counts+=("$count_raw")
         fi
     done < <(_find_project_sessions "$project_dir")
 
@@ -199,12 +346,13 @@ _migrate_project() {
 
     _log_info "Found ${#sessions[@]} sessions to migrate"
 
-    # Show preview of changes
     if [[ "$INTERACTIVE" == "true" ]]; then
         _log_info "Preview of changes:"
-        for session in "${sessions[@]}"; do
-            local changes=$(grep -c "\"cwd\":\"$old_path\"" "$session" 2>/dev/null || echo 0)
-            echo "  $(basename "$session"): $changes occurrences"
+        local idx
+        for idx in "${!sessions[@]}"; do
+            local session="${sessions[$idx]}"
+            local count="${session_counts[$idx]}"
+            echo "  $(basename "$session"): ${count} occurrences"
         done
         echo
 
@@ -214,14 +362,14 @@ _migrate_project() {
         fi
     fi
 
-    # Backup based on strategy
     case "$BACKUP_STRATEGY" in
         "project")
             _backup_project "$project_dir"
             ;;
         "file")
-            for session in "${sessions[@]}"; do
-                _backup_file "$session"
+            local session_path
+            for session_path in "${sessions[@]}"; do
+                _backup_file "$session_path"
             done
             ;;
         *)
@@ -230,40 +378,73 @@ _migrate_project() {
             ;;
     esac
 
-    # Perform the migration
     local success_count=0
     local total_changes=0
 
-    for session in "${sessions[@]}"; do
+    local i
+    for i in "${!sessions[@]}"; do
+        local session="${sessions[$i]}"
         _log_info "Migrating: $(basename "$session")"
 
+        local planned_raw
+        planned_raw=$(_count_cwd_occurrences "$session" "$old_path")
+        planned_raw=$(printf '%s' "$planned_raw" | tr -d '
+')
+
+        if [[ "$planned_raw" == ERROR:* ]]; then
+            _log_error "Failed to inspect $(basename "$session"): ${planned_raw#ERROR:}"
+            continue
+        fi
+
+        local planned_count="$planned_raw"
+
         if [[ "$DRY_RUN" == "true" ]]; then
-            local changes=$(grep -c "\"cwd\":\"$old_path\"" "$session" 2>/dev/null || echo 0)
-            _log_debug "DRY RUN: Would replace $changes occurrences in $session"
-            ((total_changes += changes))
+            _log_debug "DRY RUN: Would replace $planned_count occurrences in $session"
+            ((total_changes += planned_count))
             ((success_count++))
             continue
         fi
 
-        # Use sed to replace the old path with new path (macOS compatible)
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|\"cwd\":\"$old_path\"|\"cwd\":\"$new_path\"|g" "$session"
-        else
-            sed -i "s|\"cwd\":\"$old_path\"|\"cwd\":\"$new_path\"|g" "$session"
+        if (( planned_count == 0 )); then
+            _log_debug "No changes needed for $(basename "$session")"
+            continue
         fi
-        local changes=$?
 
-        if [[ $changes -eq 0 ]]; then
-            local occurrence_count=$(grep -c "\"cwd\":\"$new_path\"" "$session" 2>/dev/null || echo 0)
-            ((total_changes += occurrence_count))
-            ((success_count++))
-            _log_success "Updated $(basename "$session"): $occurrence_count changes"
-        else
-            _log_error "Failed to update: $(basename "$session")"
+        local replace_raw
+        replace_raw=$(_replace_cwd_path "$session" "$old_path" "$new_path")
+        replace_raw=$(printf '%s' "$replace_raw" | tr -d '
+')
+
+        if [[ "$replace_raw" == ERROR:write:* ]]; then
+            _log_error "Failed to update $(basename "$session"): ${replace_raw#ERROR:write:}"
+            continue
         fi
+
+        if [[ "$replace_raw" == ERROR:read:* ]]; then
+            _log_error "Failed to read $(basename "$session"): ${replace_raw#ERROR:read:}"
+            continue
+        fi
+
+        if [[ "$replace_raw" == ERROR:python3-missing ]]; then
+            _log_error "python3 is required for safe JSON path replacement"
+            return 1
+        fi
+
+        if [[ ! "$replace_raw" =~ ^[0-9]+$ ]]; then
+            _log_error "Unexpected replace count for $(basename "$session"): $replace_raw"
+            continue
+        fi
+
+        local replaced="$replace_raw"
+        ((total_changes += replaced))
+        ((success_count++))
+        _log_success "Updated $(basename "$session"): $replaced changes"
     done
 
-    _log_success "Migration completed: $success_count/$((${#sessions[@]})) files, $total_changes total changes"
+    MIGRATION_LAST_UPDATED_FILES=$success_count
+    MIGRATION_LAST_TOTAL_CHANGES=$total_changes
+
+    _log_success "Migration completed: $success_count/${#sessions[@]} files, $total_changes total changes"
 }
 
 # Interactive project selection
@@ -911,6 +1092,21 @@ claude_manager() {
                 if [[ "$project_moved" != "true" && -d "$from_project" ]]; then
                     target_project="$from_project"
                 fi
+
+                if [[ -d "$target_project" ]]; then
+                    if ! _migrate_project "$old_path" "$new_path" "$target_project"; then
+                        _log_warn "Session update encountered issues in $(basename "$target_project")"
+                    else
+                        local updated_files="$MIGRATION_LAST_UPDATED_FILES"
+                        local total_replacements="$MIGRATION_LAST_TOTAL_CHANGES"
+                        _log_success "Updated $updated_files session files ($total_replacements total replacements)"
+                        if (( total_replacements == 0 )); then
+                            _log_info "No session references required updates"
+                        fi
+                    fi
+                else
+                    _log_info "No project directory to update - source move completed"
+                fi
                 
                 if [[ -d "$target_project" ]]; then
                     local updated_files=0 total_replacements=0
@@ -923,6 +1119,9 @@ claude_manager() {
                             # Count occurrences before replacement
                             local before_count
                             before_count=$(grep -cE "\"cwd\"[[:space:]]*:[[:space:]]*\"$old_esc\"" "$session_file" 2>/dev/null || echo 0)
+                            # Sanitize before_count to ensure it's a clean integer
+                            before_count=$(echo "$before_count" | tr -d '\n' | sed 's/[^0-9]//g')
+                            [[ -z "$before_count" ]] && before_count=0
                             
                             if [[ "$before_count" -gt 0 ]]; then
                                 # Backup the file
@@ -976,8 +1175,10 @@ claude_manager() {
                 _log_info "Summary:"
                 _log_info "  • Source moved: $old_path -> $new_path"
                 if [[ "$project_moved" == "true" ]]; then
-                    _log_info "  • Project moved: $(basename "$from_project") -> $(basename "$to_project")"
-                    _log_info "  • Sessions updated: $updated_files files, $total_replacements replacements"
+                    _log_info "  • Project moved: $(basename \"$from_project\") -> $(basename \"$to_project\")"
+                fi
+                if [[ -d "$target_project" ]]; then
+                    _log_info "  • Sessions updated: ${MIGRATION_LAST_UPDATED_FILES:-0} files, ${MIGRATION_LAST_TOTAL_CHANGES:-0} replacements"
                 fi
                 _log_info "Use 'cm undo' to revert if needed"
                 return 0
