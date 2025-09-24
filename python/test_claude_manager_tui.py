@@ -152,6 +152,18 @@ class TestSessionValidator:
             assert SessionValidator.is_valid_working_directory("")  # Empty is valid
             assert not SessionValidator.is_valid_working_directory("/nonexistent/path")
 
+    def test_session_path_expands_user(self) -> None:
+        """Session path validation expands user home"""
+        with tempfile.TemporaryDirectory(dir=str(Path.home())) as temp_dir:
+            tilde_path = f"~/{Path(temp_dir).relative_to(Path.home())}"
+            assert SessionValidator.is_valid_session_path(tilde_path)
+
+    def test_working_directory_expands_user(self) -> None:
+        """Working directory validation expands user home"""
+        with tempfile.TemporaryDirectory(dir=str(Path.home())) as temp_dir:
+            tilde_path = f"~/{Path(temp_dir).relative_to(Path.home())}"
+            assert SessionValidator.is_valid_working_directory(tilde_path)
+
 class TestSessionMetadata:
     """Test SessionMetadata functionality"""
     

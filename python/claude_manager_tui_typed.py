@@ -150,12 +150,20 @@ class SessionValidator:
     @staticmethod
     def is_valid_session_path(value: str) -> TypeIs[SessionPath]:
         """Type guard for valid session paths"""
-        return bool(value and isinstance(value, str) and Path(value).exists())
+        if not value or not isinstance(value, str):
+            return False
+        expanded = os.path.expanduser(value)
+        return Path(expanded).exists()
     
     @staticmethod
     def is_valid_working_directory(value: str) -> TypeIs[WorkingDirectory]:
         """Type guard for valid working directories"""
-        return bool(value and isinstance(value, str) and (value == "" or Path(value).is_dir()))
+        if value == "":
+            return True
+        if not isinstance(value, str):
+            return False
+        expanded = os.path.expanduser(value)
+        return Path(expanded).is_dir()
 
 @dataclass(frozen=True, slots=True)
 class ClaudeManagerConfig:
