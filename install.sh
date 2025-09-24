@@ -91,6 +91,7 @@ EOF
     # Add config to shell rc
     if [[ -n "$SHELL_RC" ]]; then
         if ! grep -q "claude-manager.conf" "$SHELL_RC"; then
+            echo "" >> "$SHELL_RC"
             echo "source \"$CONFIG_FILE\"" >> "$SHELL_RC"
             echo "Configuration added to $SHELL_RC"
         fi
