@@ -2,6 +2,7 @@
 .claude/
 *.bak
 *_backup_*.tar.gz
+claude-session-tui/demo_projects/
 
 # Rust (for claude-session-tui)
 /claude-session-tui/target/

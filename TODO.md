@@ -1,133 +1,80 @@
-I'll help you set up the claude-project-migrator as both a standalone repository and integrate it into your main repo. Here's the best approach:
+# TODO
 
-## Option 1: Git Subtree (Recommended for your use case)
+## High Priority
 
-Git subtree is better for this scenario because:
-- You can develop in your main repo
-- Easy to push changes back to the standalone repo
-- No submodule complexity
-- Better for package manager publishing
+### Performance Optimization
+- [ ] Fix federation test failure in error handling expectation
+- [ ] Optimize session file search performance for large Claude installations (363+ files)
+- [ ] Add session file indexing or caching mechanism for faster lookups
+- [ ] Implement parallel processing for multi-file operations
 
-Let's set it up:
-```bash
-cd /Users/tryk/NabiaTech && pwd
-```
+### Security Enhancements
+- [ ] Implement content sanitization for sensitive data in sessions
+- [ ] Add dependency vulnerability scanning to CI pipeline (cargo-audit, npm audit)
+- [ ] Enhance federation security with authentication layer
+- [ ] Consider session data encryption for sensitive environments
 
-Let me outline the complete approach for you:
+## Medium Priority
 
-## Step 1: Create Standalone Repository
+### Documentation & Organization
+- [ ] Complete /docs directory reorganization (in progress)
+- [ ] Archive historical debugging documents
+- [ ] Create developer onboarding checklist
+- [ ] Document federation integration patterns
+- [ ] Add architecture diagrams
 
-First, you'll need to create a new GitHub repository for `claude-project-migrator`. Here's the recommended structure:
+### Code Quality
+- [ ] Reduce bash script complexity (215 conditionals)
+- [ ] Add comprehensive unit tests for bash components
+- [ ] Increase documentation coverage to 15%+ across all components
+- [ ] Standardize error handling across language boundaries
 
-```
-claude-project-migrator/
-├── claude-project-migrator.sh
-├── install.sh
-├── README.md
-├── LICENSE
-├── .gitignore
-├── Formula/
-│   └── claude-project-migrator.rb  # For Homebrew
-├── scoop/
-│   └── claude-project-migrator.json # For Scoop
-└── package.json                     # For npm (optional)
-```
+### User Experience
+- [ ] Improve error messages in CLI for better UX
+- [ ] Add progress indicators for long-running operations
+- [ ] Implement better conflict resolution UI
+- [ ] Add verbose mode for debugging
 
-## Step 2: Git Subtree Setup
+## Low Priority
 
-Once you have the standalone repo, you can add it as a subtree:
+### Testing & Benchmarking
+- [ ] Add performance benchmarks to CI pipeline
+- [ ] Create integration test suite covering CLI → TUI → Federation
+- [ ] Add automated security testing
+- [ ] Implement load testing for large session files
 
-```bash
-# Add the remote repository as a subtree
-git subtree add --prefix=tools/claude-project-migrator \
-  https://github.com/yourusername/claude-project-migrator.git main --squash
+### Feature Enhancements
+- [ ] Add session file compression option
+- [ ] Implement session diff visualization
+- [ ] Create web-based dashboard for session analytics
+- [ ] Add export formats (JSON, CSV) for session data
 
-# To push changes back to the standalone repo
-git subtree push --prefix=tools/claude-project-migrator \
-  https://github.com/yourusername/claude-project-migrator.git main
+### Technical Debt
+- [ ] Remove V2 Shadow Architecture from Rust TUI (over-engineered)
+- [ ] Consolidate Python utilities purpose and documentation
+- [ ] Extract shared patterns into reusable libraries
+- [ ] Implement structured logging across all components
 
-# To pull updates from the standalone repo
-git subtree pull --prefix=tools/claude-project-migrator \
-  https://github.com/yourusername/claude-project-migrator.git main --squash
-```
+## Completed (Recent)
 
-## Step 3: Package Manager Setup
+### ✅ Fixed Issues
+- [x] Arithmetic syntax error in session file update (commit ddb5403)
+- [x] Path resolution robustness improvements (commit 736916c)
+- [x] Tilde expansion in path resolution (commit 213dcd3)
+- [x] Shell RC configuration installation (commit e283e31)
+- [x] Context-sensitive session management (commit 1a25d8a)
+- [x] Enhanced error handling and search capabilities (commit aeab546)
+- [x] Prioritized project detection system (commit 372ef9a)
 
-### For Homebrew (macOS/Linux)
-Create `Formula/claude-project-migrator.rb`:
+### ✅ Documentation
+- [x] Comprehensive repository analysis completed
+- [x] Security posture evaluation completed
+- [x] Code quality metrics assessment completed
+- [x] Maintainability review completed
 
-```ruby
-class ClaudeProjectMigrator < Formula
-  desc "Migrate Claude projects and update session paths"
-  homepage "https://github.com/yourusername/claude-project-migrator"
-  url "https://github.com/yourusername/claude-project-migrator/archive/v1.0.0.tar.gz"
-  sha256 "YOUR_SHA256_HERE"
-  license "MIT"
+## Notes
 
-  def install
-    bin.install "claude-project-migrator.sh" => "claude-project-migrator"
-    bin.install "install.sh"
-  end
-
-  test do
-    system "#{bin}/claude-project-migrator", "help"
-  end
-end
-```
-
-### For Scoop (Windows)
-Create `scoop/claude-project-migrator.json`:
-
-```json
-{
-  "version": "1.0.0",
-  "description": "Migrate Claude projects and update session paths",
-  "homepage": "https://github.com/yourusername/claude-project-migrator",
-  "license": "MIT",
-  "url": "https://github.com/yourusername/claude-project-migrator/archive/v1.0.0.zip",
-  "hash": "YOUR_HASH_HERE",
-  "extract_dir": "claude-project-migrator-1.0.0",
-  "bin": [
-    "claude-project-migrator.sh",
-    "install.sh"
-  ]
-}
-```
-
-## Step 4: Workflow
-
-1. **Develop in your main repo**: Make changes in `tools/claude-project-migrator/`
-2. **Push to standalone repo**: Use `git subtree push` to update the standalone repo
-3. **Release**: Tag releases in the standalone repo for package managers
-4. **Update package managers**: Update formula/manifest with new version info
-
-## Alternative: Git Submodule
-
-If you prefer submodules (more complex but cleaner separation):
-
-```bash
-# Add as submodule
-git submodule add https://github.com/yourusername/claude-project-migrator.git tools/claude-project-migrator
-
-# Update submodule
-git submodule update --remote tools/claude-project-migrator
-
-# Clone with submodules
-git clone --recursive https://github.com/yourusername/main-repo.git
-```
-
-## Recommended Approach
-
-I recommend **Git Subtree** because:
-- ✅ Easier to develop and maintain
-- ✅ No submodule complexity for contributors
-- ✅ Better for package manager publishing
-- ✅ Changes can be made in either repo
-- ✅ No need for `--recursive` clones
-
-Would you like me to:
-1. Create the files in a local directory first?
-2. Help you set up the GitHub repository?
-3. Create the package manager configurations?
-
-Which approach would you prefer to start with?
+- Federation integration has 1 failing test that needs investigation
+- Performance issues observed with 363+ session files
+- Root directory cleanup recommended for better organization
+- Consider implementing session file garbage collection for old/unused sessions
