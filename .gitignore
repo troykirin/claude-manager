@@ -1,0 +1,47 @@
+# Claude Manager .gitignore
+
+# Development
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+test_output/
+*.log
+*.bak
+
+# Build artifacts
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Configuration (sensitive)
+.env
+.env.local
+*.conf
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+Thumbs.db
+.Trash-*
+
+# Backup files
+*.backup
+*_backup_*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Node (if future TypeScript integration)
+node_modules/
+package-lock.json
+yarn.lock
