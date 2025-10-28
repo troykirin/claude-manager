@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 
 # Claude Manager Installation Script
+# XDG Base Directory Specification compliant
 
 set -e
 
+# XDG paths
+XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR="$HOME/.local/bin"
-CLAUDE_DIR="$HOME/.claude"
+INSTALL_DIR="$XDG_BIN_HOME"
+CLAUDE_DIR="$HOME/.claude"  # Claude Code stores sessions here (not XDG-compliant by design)
 
 echo "Installing Claude Manager..."
 
@@ -53,7 +58,8 @@ echo "Would you like to set up configuration? (y/n)"
 read -r config_response
 
 if [[ "$config_response" =~ ^[Yy]$ ]]; then
-    CONFIG_FILE="$HOME/.claude-manager.conf"
+    CONFIG_FILE="${XDG_CONFIG_HOME}/nabi/claude-manager.conf"
+    mkdir -p "${XDG_CONFIG_HOME}/nabi"
 
     # Claude directory
     read -p "Claude directory (default: $CLAUDE_DIR): " user_claude_dir

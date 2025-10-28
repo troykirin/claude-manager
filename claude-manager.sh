@@ -2,15 +2,36 @@
 
 # Claude Manager
 # Manage Claude projects and update session paths
+# XDG-compliant configuration and state management
 
 set -e
 
+# XDG Base Directory Specification (https://specifications.freedesktop.org/basedir-spec/)
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+
 # Configuration with defaults
-export CLAUDE_DIR="$HOME/.claude"
+# Note: CLAUDE_DIR points to where Claude Code stores sessions (~/.claude)
+# This is NOT XDG-compliant by Claude Code's design, but we reference it for compatibility
+export CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 export BACKUP_STRATEGY="${CLAUDE_BACKUP_STRATEGY:-file}"  # file or project
 export INTERACTIVE="${CLAUDE_INTERACTIVE:-true}"
 export DRY_RUN="${CLAUDE_DRY_RUN:-false}"
-export UNDO_FILE="$CLAUDE_DIR/.last_move_operation"
+
+# Undo file stored in XDG-compliant state directory
+mkdir -p "${XDG_STATE_HOME}/nabi"
+export UNDO_FILE="${XDG_STATE_HOME}/nabi/claude-manager.last_move_operation"
+
+# Backup directory (XDG-compliant)
+BACKUP_BASE_DIR="${XDG_STATE_HOME}/nabi/backups"
+mkdir -p "$BACKUP_BASE_DIR"
+
+# Agent mode flags (for non-interactive autonomous execution)
+export AGENT_NO_CONFIRM="${AGENT_NO_CONFIRM:-false}"
+export AGENT_MODE="${AGENT_MODE:-false}"
+export AGENT_VERBOSE="${AGENT_VERBOSE:-false}"
+export FORCE_BACKUP_STRATEGY=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -831,15 +852,140 @@ _suggest_project_dir_for() {
     echo "$CLAUDE_DIR/projects/-${encoded_name}"
 }
 
+# Parse agent-mode flags from command arguments
+_parse_agent_flags() {
+    local -n args_ref=$1
+    local -n flags_ref=$2
+
+    # flags_ref is an associative array to store parsed flags
+    local i
+    for ((i = 0; i < ${#args_ref[@]}; i++)); do
+        local arg="${args_ref[$i]}"
+        case "$arg" in
+            --no-confirm)
+                flags_ref["no_confirm"]="true"
+                AGENT_NO_CONFIRM="true"
+                INTERACTIVE="false"
+                ;;
+            --agent-mode)
+                flags_ref["agent_mode"]="true"
+                AGENT_MODE="true"
+                INTERACTIVE="false"
+                ;;
+            --verbose)
+                flags_ref["verbose"]="true"
+                AGENT_VERBOSE="true"
+                CLAUDE_DEBUG="1"
+                ;;
+            --backup-strategy=*)
+                local strategy="${arg#*=}"
+                flags_ref["backup_strategy"]="$strategy"
+                FORCE_BACKUP_STRATEGY="$strategy"
+                ;;
+            --force-backup)
+                flags_ref["force_backup"]="true"
+                ;;
+        esac
+    done
+}
+
+# Create backup file in XDG-compliant location
+_create_project_backup() {
+    local project_dir="$1"
+    local project_name
+    project_name=$(basename "$project_dir")
+
+    local backup_file="$BACKUP_BASE_DIR/$(date +%Y%m%d_%H%M%S)_${project_name}.tar.gz"
+
+    _log_info "Creating backup: $backup_file"
+
+    # Use -- to separate tar flags from filenames (project names start with -)
+    if tar -czf "$backup_file" -C "$CLAUDE_DIR/projects" -- "$project_name" 2>/dev/null; then
+        _log_success "Backup created: $backup_file"
+        echo "$backup_file"
+        return 0
+    else
+        _log_error "Failed to create backup at: $backup_file"
+        return 1
+    fi
+}
+
+# Output agent-mode metadata
+_output_migration_metadata() {
+    local status="$1"
+    local old_path="$2"
+    local new_path="$3"
+    local project_dir="$4"
+    local sessions_updated="${5:-0}"
+    local total_changes="${6:-0}"
+    local backup_path="${7:-}"
+
+    if [[ "$AGENT_MODE" == "true" ]] || [[ "$AGENT_NO_CONFIRM" == "true" ]]; then
+        echo ""
+        echo "[MIGRATION_METADATA]"
+        echo "MIGRATION_STATUS=$status"
+        echo "MIGRATION_OLD_PATH=$old_path"
+        echo "MIGRATION_NEW_PATH=$new_path"
+        echo "MIGRATION_PROJECT=$(basename "$project_dir")"
+        echo "MIGRATION_SESSIONS_UPDATED=$sessions_updated"
+        echo "MIGRATION_TOTAL_CHANGES=$total_changes"
+        if [[ -n "$backup_path" ]]; then
+            echo "MIGRATION_BACKUP_PATH=$backup_path"
+            echo "MIGRATION_BACKUP_VERIFIED=true"
+        fi
+        echo "MIGRATION_UNDO_FILE=$UNDO_FILE"
+        echo "[/MIGRATION_METADATA]"
+        echo ""
+    fi
+}
+
 # Main CLI function
 claude_manager() {
     local cmd="$1"
+    shift  # Remove command from arguments
+
+    # Parse agent-mode flags and collect positional arguments
+    declare -A flags
+    local positional_args=()
+    for arg in "$@"; do
+        case "$arg" in
+            --no-confirm)
+                flags["no_confirm"]="true"
+                AGENT_NO_CONFIRM="true"
+                INTERACTIVE="false"
+                ;;
+            --agent-mode)
+                flags["agent_mode"]="true"
+                AGENT_MODE="true"
+                INTERACTIVE="false"
+                ;;
+            --verbose)
+                flags["verbose"]="true"
+                AGENT_VERBOSE="true"
+                CLAUDE_DEBUG="1"
+                ;;
+            --backup-strategy=*)
+                local strategy="${arg#*=}"
+                flags["backup_strategy"]="$strategy"
+                FORCE_BACKUP_STRATEGY="$strategy"
+                ;;
+            --force-backup)
+                flags["force_backup"]="true"
+                ;;
+            --*)
+                # Unknown flag, skip
+                ;;
+            *)
+                positional_args+=("$arg")
+                ;;
+        esac
+    done
 
     case "$cmd" in
         "migrate"|"m")
-            local old_path="$2"
-            local new_path="$3"
-            local project_dir="$4"
+            local old_path="${positional_args[0]:-}"
+            local new_path="${positional_args[1]:-}"
+            local project_dir="${positional_args[2]:-}"
 
             if [[ -z "$old_path" || -z "$new_path" ]]; then
                 if [[ "$INTERACTIVE" == "true" ]]; then
@@ -863,12 +1009,53 @@ claude_manager() {
                     echo "Usage: claude_manager migrate <old_path> <new_path> [project_dir]"
                     return 1
                 fi
+            else
+                # Auto-detect project directory if not provided
+                if [[ -z "$project_dir" ]]; then
+                    _log_debug "Auto-detecting project directory for path: $old_path"
+                    # Find the project containing sessions with this old_path
+                    local projects=()
+                    local found_projects
+                    found_projects=$(_find_projects_prioritized "$old_path")
+                    if [[ -n "$found_projects" ]]; then
+                        while IFS= read -r proj; do
+                            projects+=("$proj")
+                        done <<< "$found_projects"
+                        project_dir="${projects[0]}"
+                        _log_info "Auto-detected project: $(basename "$project_dir")"
+                    else
+                        _log_error "Could not auto-detect project directory for path: $old_path"
+                        return 1
+                    fi
+                fi
             fi
 
-            _migrate_project "$old_path" "$new_path" "$project_dir"
+            # Agent mode: Create mandatory backup before migration
+            local backup_path=""
+            if [[ "$AGENT_NO_CONFIRM" == "true" ]] || [[ "$AGENT_MODE" == "true" ]] || [[ "${flags[force_backup]}" == "true" ]]; then
+                backup_path=$(_create_project_backup "$project_dir")
+                if [[ $? -ne 0 ]]; then
+                    _output_migration_metadata "failure" "$old_path" "$new_path" "$project_dir" 0 0 ""
+                    return 1
+                fi
+            fi
+
+            # Perform the actual migration
+            if ! _migrate_project "$old_path" "$new_path" "$project_dir"; then
+                _output_migration_metadata "failure" "$old_path" "$new_path" "$project_dir" 0 0 "$backup_path"
+                return 1
+            fi
+
+            # Get migration stats for metadata output
+            local sessions_updated="$MIGRATION_LAST_UPDATED_FILES"
+            local total_changes="$MIGRATION_LAST_TOTAL_CHANGES"
+
             # After migrating paths in sessions, rename the Claude project dir to
             # match the new path's basename if safe/applicable.
             _sync_project_dir_name_with_path "$project_dir" "$new_path"
+
+            # Output metadata for agent consumption
+            _output_migration_metadata "success" "$old_path" "$new_path" "$project_dir" "$sessions_updated" "$total_changes" "$backup_path"
             ;;
 
         "move"|"mv")
