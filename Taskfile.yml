@@ -230,6 +230,7 @@ tasks:
     cmds:
       - task tui:test
       - task federation:test
+      - task test
       - echo "All tests completed!"
 
   all:clean:
@@ -245,3 +246,110 @@ tasks:
     cmds:
       - rm -rf dist/ node_modules/.cache
       - echo "Federation artifacts cleaned"
+
+  # ===== TEST AUTOMATION SUITE =====
+
+  test:
+    desc: "Run all test suites (unit, integration, regression)"
+    cmds:
+      - echo "🧪 Running claude-manager test suite..."
+      - bats tests/unit/
+      - bats tests/integration/
+      - bats tests/regression/
+      - echo "✅ All tests passed!"
+
+  test:unit:
+    desc: "Run unit tests only"
+    cmds:
+      - echo "Running unit tests..."
+      - bats tests/unit/
+
+  test:integration:
+    desc: "Run integration tests only"
+    cmds:
+      - echo "Running integration tests..."
+      - bats tests/integration/
+
+  test:regression:
+    desc: "Run regression tests only"
+    cmds:
+      - echo "Running regression tests..."
+      - bats tests/regression/
+
+  test:e2e:
+    desc: "Run end-to-end tests only"
+    cmds:
+      - echo "Running E2E tests..."
+      - bats tests/e2e/
+
+  test:critical:
+    desc: "Run critical tests only (fast - under 30s)"
+    cmds:
+      - echo "🚀 Running critical tests (path transformer + regressions)..."
+      - bats tests/unit/test_path_transformer.bats || true
+      - echo "✅ Critical tests completed"
+
+  test:watch:
+    desc: "Watch for changes and re-run critical tests"
+    cmds:
+      - |
+        echo "👁️  Watching claude-manager.sh for changes..."
+        echo "Press Ctrl+C to stop"
+        if command -v fswatch >/dev/null; then
+          fswatch -o claude-manager.sh | while read; do
+            clear
+            echo "🔄 Change detected, running tests..."
+            task test:critical
+          done
+        else
+          echo "⚠️  fswatch not installed, using polling mode"
+          while true; do
+            sleep 2
+            if [ "$(find claude-manager.sh -mmin -0.1)" ]; then
+              clear
+              echo "🔄 Change detected, running tests..."
+              task test:critical
+            fi
+          done
+        fi
+
+  test:coverage:
+    desc: "Analyze test coverage"
+    cmds:
+      - echo "📊 Analyzing test coverage..."
+      - |
+        if [ -x tests/analyze_coverage.sh ]; then
+          ./tests/analyze_coverage.sh
+        else
+          echo "Coverage analysis script not found"
+          echo "Test files:"
+          find tests -name "*.bats" -type f | wc -l
+          echo "Test cases:"
+          grep -r "@test" tests/ | wc -l
+        fi
+
+  test:install:
+    desc: "Install bats test framework"
+    cmds:
+      - |
+        if command -v bats >/dev/null; then
+          echo "✅ Bats already installed: $(bats --version)"
+        else
+          echo "Installing bats-core..."
+          if [ "$(uname)" = "Darwin" ]; then
+            if command -v brew >/dev/null; then
+              brew install bats-core
+            else
+              echo "❌ Homebrew not found. Install from: https://github.com/bats-core/bats-core"
+            fi
+          else
+            echo "📥 Clone and install from: https://github.com/bats-core/bats-core"
+            echo "git clone https://github.com/bats-core/bats-core.git"
+            echo "cd bats-core && sudo ./install.sh /usr/local"
+          fi
+        fi
+
+  test:quickstart:
+    desc: "Show test quick start guide"
+    cmds:
+      - cat tests/QUICKSTART.md
