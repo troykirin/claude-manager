@@ -111,6 +111,13 @@ _undo_last_operation() {
             local new_path="${args[1]:-}"
             local from_project="${args[2]:-}"
             local to_project="${args[3]:-}"
+            local source_moved="${args[4]:-true}"
+
+            if [[ -z "$source_moved" ]]; then
+                source_moved="true"
+            else
+                source_moved=$(printf '%s' "$source_moved" | tr '[:upper:]' '[:lower:]')
+            fi
 
             if [[ -z "$old_path" || -z "$new_path" ]]; then
                 _log_error "Undo information missing required paths"
@@ -121,7 +128,9 @@ _undo_last_operation() {
 
             # Handle simple directory move (no project)
             if [[ "$from_project" == "none" ]]; then
-                if [[ -d "$new_path" ]]; then
+                if [[ "$source_moved" == "false" ]]; then
+                    _log_info "Original operation skipped filesystem move; nothing to restore on disk"
+                elif [[ -d "$new_path" ]]; then
                     mv "$new_path" "$old_path"
                     _log_success "Restored directory: $new_path -> $old_path"
                 else
@@ -134,11 +143,15 @@ _undo_last_operation() {
                     _log_success "Restored project: $to_project -> $from_project"
                 fi
 
-                if [[ -d "$new_path" ]]; then
-                    mv "$new_path" "$old_path"
-                    _log_success "Restored source: $new_path -> $old_path"
+                if [[ "$source_moved" != "false" ]]; then
+                    if [[ -d "$new_path" ]]; then
+                        mv "$new_path" "$old_path"
+                        _log_success "Restored source: $new_path -> $old_path"
+                    else
+                        _log_warn "Source directory not found during undo: $new_path"
+                    fi
                 else
-                    _log_warn "Source directory not found during undo: $new_path"
+                    _log_info "Original operation skipped filesystem move; leaving source directories untouched"
                 fi
 
                 if [[ -n "$from_project" ]]; then
@@ -872,22 +885,42 @@ claude_manager() {
                 # Resolve to absolute paths
                 if command -v realpath >/dev/null 2>&1 && realpath -m /tmp >/dev/null 2>&1; then
                     # GNU realpath with -m support
-                    old_path=$(realpath "$old_path" 2>/dev/null) || {
+                    local resolved_old
+                    resolved_old=$(realpath "$old_path" 2>/dev/null || true)
+                    if [[ -z "$resolved_old" ]]; then
+                        resolved_old=$(_resolve_absolute_path "$(pwd)" "$old_path")
+                    fi
+                    if [[ -z "$resolved_old" ]]; then
                         _log_error "Invalid old_path: $2"
                         return 1
-                    }
-                    new_path=$(realpath -m "$new_path" 2>/dev/null) || {
+                    fi
+
+                    local resolved_new
+                    resolved_new=$(realpath -m "$new_path" 2>/dev/null || true)
+                    if [[ -z "$resolved_new" ]]; then
+                        resolved_new=$(_resolve_absolute_path "$(pwd)" "$new_path")
+                    fi
+                    if [[ -z "$resolved_new" ]]; then
                         _log_error "Invalid new_path: $3"
                         return 1
-                    }
+                    fi
+
+                    old_path="$resolved_old"
+                    new_path="$resolved_new"
                 else
                     # Fallback path resolution (macOS realpath or no realpath)
                     if command -v realpath >/dev/null 2>&1; then
                         # macOS realpath (existing paths only)
-                        old_path=$(realpath "$old_path" 2>/dev/null) || {
+                        local resolved_old
+                        resolved_old=$(realpath "$old_path" 2>/dev/null || true)
+                        if [[ -z "$resolved_old" ]]; then
+                            resolved_old=$(_resolve_absolute_path "$(pwd)" "$old_path")
+                        fi
+                        if [[ -z "$resolved_old" ]]; then
                             _log_error "Invalid old_path: $2"
                             return 1
-                        }
+                        fi
+                        old_path="$resolved_old"
                         new_path=$(_resolve_absolute_path "$(pwd)" "$new_path")
                     else
                         # No realpath available
@@ -914,20 +947,17 @@ claude_manager() {
                 
                 # ========== PRE-FLIGHT CHECKS ==========
                 _log_debug "Performing pre-flight validation..."
-                
-                # Verify source exists and is a directory
+
+                local source_exists="true"
                 if [[ ! -e "$old_path" ]]; then
-                    _log_error "Source path does not exist: $old_path"
-                    return 1
-                fi
-                
-                if [[ ! -d "$old_path" ]]; then
+                    _log_warn "Source path not found: $old_path"
+                    source_exists="false"
+                elif [[ ! -d "$old_path" ]]; then
                     _log_error "Source path is not a directory: $old_path"
                     return 1
                 fi
-                
-                # Check if source is readable
-                if [[ ! -r "$old_path" ]]; then
+
+                if [[ "$source_exists" == "true" && ! -r "$old_path" ]]; then
                     _log_error "Source directory is not readable: $old_path"
                     return 1
                 fi
@@ -1007,6 +1037,10 @@ claude_manager() {
                 _log_info "Destination: $new_path"
                 _log_info "Project:     $from_project -> $to_project"
                 _log_info "Sessions:    $session_count files with $occurrence_count cwd occurrences"
+
+                if [[ "$source_exists" == "false" ]]; then
+                    _log_warn "Source directory missing - will only update Claude session metadata"
+                fi
                 
                 if [[ ! -d "$from_project" ]]; then
                     _log_warn "Project directory not found - will perform source-only move"
@@ -1015,7 +1049,11 @@ claude_manager() {
                 # ========== DRY RUN SUPPORT ==========
                 if [[ "$DRY_RUN" == "true" ]]; then
                     _log_info "=== DRY RUN - No changes will be made ==="
-                    _log_debug "Would move: $old_path -> $new_path"
+                    if [[ "$source_exists" == "true" ]]; then
+                        _log_debug "Would move: $old_path -> $new_path"
+                    else
+                        _log_debug "Would skip filesystem move (source missing): $old_path"
+                    fi
                     if [[ -d "$from_project" ]]; then
                         _log_debug "Would move project: $from_project -> $to_project"
                         _log_debug "Would update $session_count session files ($occurrence_count total replacements)"
@@ -1034,28 +1072,35 @@ claude_manager() {
                 
                 # ========== TRANSACTIONAL EXECUTION ==========
                 _log_info "=== Executing Move Operation ==="
-                
-                # Save undo info before any changes
-                _save_undo_info "move" "$old_path" "$new_path" "$from_project" "$to_project"
-                
-                # Step 1: Move source directory
+
+                local source_moved="false"
+
+                # Step 1: Move source directory (if present)
                 _log_info "Step 1/3: Moving source directory..."
-                local new_parent
-                new_parent="$(dirname "$new_path")"
-                if [[ ! -d "$new_parent" ]]; then
-                    if ! mkdir -p "$new_parent"; then
-                        _log_error "Failed to create parent directory: $new_parent"
+                if [[ "$source_exists" == "true" ]]; then
+                    local new_parent
+                    new_parent="$(dirname "$new_path")"
+                    if [[ ! -d "$new_parent" ]]; then
+                        if ! mkdir -p "$new_parent"; then
+                            _log_error "Failed to create parent directory: $new_parent"
+                            rm -f "$UNDO_FILE"
+                            return 1
+                        fi
+                    fi
+
+                    if ! mv "$old_path" "$new_path"; then
+                        _log_error "Failed to move source directory"
                         rm -f "$UNDO_FILE"
                         return 1
                     fi
+                    _log_success "Moved source directory: $old_path -> $new_path"
+                    source_moved="true"
+                else
+                    _log_warn "Source directory missing; skipping filesystem move step"
                 fi
-                
-                if ! mv "$old_path" "$new_path"; then
-                    _log_error "Failed to move source directory"
-                    rm -f "$UNDO_FILE"
-                    return 1
-                fi
-                _log_success "Moved source directory: $old_path -> $new_path"
+
+                # Save undo info after establishing move state
+                _save_undo_info "move" "$old_path" "$new_path" "$from_project" "$to_project" "$source_moved"
                 
                 # Step 2: Move project directory (if exists)
                 _log_info "Step 2/3: Moving project directory..."
@@ -1173,7 +1218,11 @@ claude_manager() {
                 
                 _log_success "=== Move Operation Completed Successfully ==="
                 _log_info "Summary:"
-                _log_info "  • Source moved: $old_path -> $new_path"
+                if [[ "$source_moved" == "true" ]]; then
+                    _log_info "  • Source moved: $old_path -> $new_path"
+                else
+                    _log_info "  • Source directory missing; filesystem move skipped"
+                fi
                 if [[ "$project_moved" == "true" ]]; then
                     _log_info "  • Project moved: $(basename \"$from_project\") -> $(basename \"$to_project\")"
                 fi
@@ -1238,7 +1287,7 @@ claude_manager() {
                         return 1
                     fi
                     
-                    _save_undo_info "move" "$old_path" "$new_path" "none" "none"
+                    _save_undo_info "move" "$old_path" "$new_path" "none" "none" "true"
                     
                     if mv "$old_path" "$new_path"; then
                         _log_success "Moved directory: $old_path -> $new_path"
@@ -1307,7 +1356,7 @@ claude_manager() {
             fi
             
             # Save undo information before making changes
-            _save_undo_info "move" "$old_path" "$new_path" "$selected_project" "$to_project"
+            _save_undo_info "move" "$old_path" "$new_path" "$selected_project" "$to_project" "true"
             
             # Now perform operations in safe order:
             # 1. Update sessions first (while paths still exist)
