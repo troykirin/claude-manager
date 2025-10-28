@@ -685,9 +685,9 @@ _sync_project_dir_name_with_path() {
         return 0
     fi
 
-    local parent_dir
-    parent_dir="$(dirname "$project_dir")"
-    local target_dir="$parent_dir/$(basename "$new_path")"
+    # Use the proper path encoder to transform new_path to Claude's naming convention
+    local target_dir
+    target_dir=$(_suggest_project_dir_for "$new_path")
 
     if [[ "$project_dir" == "$target_dir" ]]; then
         return 0
@@ -703,6 +703,9 @@ _sync_project_dir_name_with_path() {
             _log_warn "Project directory rename skipped"
             return 0
         fi
+    else
+        # In non-interactive mode, log what's happening
+        _log_debug "Auto-renaming project directory: $(basename "$project_dir") -> $(basename "$target_dir")"
     fi
 
     if [[ "$DRY_RUN" == "true" ]]; then
