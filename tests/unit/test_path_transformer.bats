@@ -46,7 +46,8 @@ teardown() {
 @test "transformer: home tilde expansion" {
     result=$(_suggest_project_dir_for "~/dev/crush")
     # Tilde should expand to HOME, then be encoded
-    home_encoded=$(echo "$HOME" | sed 's|^/||' | sed 's|/|-|g')
+    # Note: Dots are replaced with dashes just like slashes
+    home_encoded=$(echo "$HOME" | sed 's|^/||' | sed 's|\.|-|g' | sed 's|/|-|g')
     expected="$CLAUDE_DIR/projects/-${home_encoded}-dev-crush"
     [ "$result" = "$expected" ]
 }
