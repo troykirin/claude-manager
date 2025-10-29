@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# TUI Runner with proper terminal handling
+# TUI Runner - Browse and search all your Claude conversations
+# Loads from ~/.claude/projects by default, showing 1000+ sessions
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/claude-session-tui && pwd)"
 
 # Ensure we're in a TTY
 if [ ! -t 0 ] || [ ! -t 1 ]; then
@@ -12,10 +17,13 @@ fi
 export TERM="${TERM:-xterm-256color}"
 
 # Build the TUI if needed
-if [ ! -f "target/debug/claude-session-tui" ]; then
-    echo "Building TUI component..."
-    cargo build --bin claude-session-tui --features tui
+if [ ! -f "$SCRIPT_DIR/target/release/claude-session-tui" ]; then
+    echo "Building TUI component (first run, this may take a minute)..."
+    cd "$SCRIPT_DIR"
+    cargo build --release --features tui --quiet
 fi
 
-# Run with proper terminal setup
-exec cargo run --bin claude-session-tui --features tui -- "$@"
+# Run the TUI with default ~/.claude/projects
+# Usage: ./run-tui.sh [--dir /custom/path]
+cd "$SCRIPT_DIR"
+exec ./target/release/claude-session-tui "$@"
