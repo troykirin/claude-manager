@@ -273,3 +273,61 @@ teardown() {
     result=$(_suggest_project_dir_for "relative/path")
     [[ "$result" == "$CLAUDE_DIR/projects/-relative-path" ]]
 }
+
+# ===== IDEMPOTENCY: ALREADY-ENCODED PROJECT PATHS =====
+# Critical fix for organize extract command
+# These tests ensure passing an already-encoded project path returns it unchanged
+
+@test "transformer: already-encoded full path is idempotent" {
+    # When user passes ~/.claude/projects/-Users-tryk-project
+    # Should return it unchanged, not double-encode it
+    input="$CLAUDE_DIR/projects/-Users-tryk-nabia-fumadocs"
+    result=$(_suggest_project_dir_for "$input")
+    [ "$result" = "$input" ]
+}
+
+@test "transformer: already-encoded path relative to CLAUDE_DIR works" {
+    # Using the actual CLAUDE_DIR location for the test
+    input="$CLAUDE_DIR/projects/-Users-tryk-nabia-fumadocs"
+    result=$(_suggest_project_dir_for "$input")
+    [ "$result" = "$input" ]
+    # Verify no double-encoding happened
+    [[ "$result" != *"-Users-tryk-nabia-fumadocs"*"-Users-tryk-nabia-fumadocs"* ]]
+}
+
+@test "transformer: encoded project basename only" {
+    # User passes just the project name without path
+    input="-Users-tryk-nabia-project"
+    # Should expand to full project path
+    expected="$CLAUDE_DIR/projects/-Users-tryk-nabia-project"
+    result=$(_suggest_project_dir_for "$input")
+    [ "$result" = "$expected" ]
+    # Verify it doesn't try to double-encode (should be exactly the expected path)
+    [[ "$result" != *"-Users-tryk-nabia-project-Users-tryk"* ]]
+}
+
+@test "transformer: already-encoded path with dots and dashes" {
+    # Complex encoded name with multiple transformations
+    input="$CLAUDE_DIR/projects/-Users-tryk--config-nabi-project-v1-2-3"
+    result=$(_suggest_project_dir_for "$input")
+    [ "$result" = "$input" ]
+}
+
+@test "transformer: encode→decode→encode is idempotent" {
+    # Round trip: source path → encoded → source path → encoded should be same
+    source_path="/Users/tryk/my.project-v1"
+    result1=$(_suggest_project_dir_for "$source_path")
+
+    # Now pass the encoded path back
+    result2=$(_suggest_project_dir_for "$result1")
+
+    # Should get same result both times
+    [ "$result1" = "$result2" ]
+}
+
+@test "transformer: handles edge case with multiple dashes in encoded name" {
+    # Project from ~/.config directory: -Users-tryk--config
+    input="$CLAUDE_DIR/projects/-Users-tryk--config"
+    result=$(_suggest_project_dir_for "$input")
+    [ "$result" = "$input" ]
+}
