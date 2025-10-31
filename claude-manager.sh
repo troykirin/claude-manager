@@ -843,10 +843,30 @@ _find_projects_by_session_path() {
 # Suggest a Claude project directory path for a given new source path
 _suggest_project_dir_for() {
     local new_path="$1"
-    
+
     # Expand ~ to full home path
     new_path="${new_path/#\~/$HOME}"
-    
+
+    # IDEMPOTENCY FIX: Detect already-encoded project paths and return as-is
+    # This prevents double-encoding when users pass $CLAUDE_DIR/projects/-XYZ paths
+
+    # Detection 1: Full path already encoded in CLAUDE_DIR/projects/?
+    if [[ "$new_path" == "$CLAUDE_DIR/projects/-"* ]]; then
+        _log_debug "Path already encoded (full), returning as-is: $new_path"
+        echo "$new_path"
+        return 0
+    fi
+
+    # Detection 2: Just the basename of an encoded project (e.g., "-Users-tryk-project")?
+    # Check without using basename (which breaks on leading dashes)
+    if [[ "$new_path" == "-"* ]] && [[ ! "$new_path" =~ / ]]; then
+        # It's just a project name like "-Users-tryk-project" without full path
+        _log_debug "Path is encoded project basename, expanding to full path"
+        echo "$CLAUDE_DIR/projects/$new_path"
+        return 0
+    fi
+
+    # Standard case: Encode the source path to project path
     # Convert absolute path to Claude Code project naming convention
     # Claude uses double dashes for dots in paths and single dash for path separators
     # Example: /Users/tryk/.claude/sync -> -Users-tryk--claude-sync
@@ -1699,14 +1719,15 @@ claude_manager() {
             
         "organize"|"org")
             # Granular session organization commands
-            local subcmd="$2"
-            
+            # After shift, $1 is now the subcommand (was $2 before shift)
+            local subcmd="${positional_args[0]:-}"
+
             case "$subcmd" in
                 "extract"|"e")
                     # Extract specific session UUID to target directory
-                    local uuid="$3"
-                    local source_dir="$4"
-                    local target_dir="$5"
+                    local uuid="${positional_args[1]:-}"
+                    local source_dir=""
+                    local target_dir=""
                     
                     # Handle --from and --to flags for better UX
                     if [[ "$uuid" == "--help" || -z "$uuid" ]]; then
@@ -1789,7 +1810,10 @@ claude_manager() {
                     # Check session content references source_dir
                     local ref_count
                     ref_count=$(grep -c "\"cwd\":\"$source_dir\"" "$session_file" 2>/dev/null || echo 0)
-                    
+                    # Ensure ref_count is a clean integer (strip any whitespace/newlines)
+                    ref_count="${ref_count//[^0-9]/}"
+                    [[ -z "$ref_count" ]] && ref_count=0
+
                     if [[ "$ref_count" -eq 0 ]]; then
                         _log_warn "Session $uuid doesn't reference $source_dir"
                         
@@ -1950,20 +1974,160 @@ claude_manager() {
                         _log_info "Source project is now empty - consider removing it"
                     fi
                     ;;
-                    
+
+                "merge"|"m")
+                    # Merge two session JSONL files by appending only new lines from source to target
+                    local uuid="${positional_args[1]:-}"
+                    local source_path=""
+                    local target_path=""
+
+                    if [[ "$uuid" == "--help" || -z "$uuid" ]]; then
+                        _log_info "Usage: cm organize merge <uuid> --from <source> --to <target>"
+                        _log_info ""
+                        _log_info "Merge two session JSONL files by appending new lines from source to target"
+                        _log_info "Deduplicates lines to prevent duplicates"
+                        return 0
+                    fi
+
+                    # Parse --from and --to flags
+                    local args=("$@")
+                    for i in "${!args[@]}"; do
+                        if [[ "${args[$i]}" == "--from" ]]; then
+                            source_path="${args[$((i+1))]}"
+                        elif [[ "${args[$i]}" == "--to" ]]; then
+                            target_path="${args[$((i+1))]}"
+                        fi
+                    done
+
+                    if [[ -z "$source_path" || -z "$target_path" ]]; then
+                        _log_error "Source and target paths required"
+                        _log_info "Usage: cm organize merge <uuid> --from <source> --to <target>"
+                        return 1
+                    fi
+
+                    # Find JSONL files
+                    local source_file=""
+                    local target_file=""
+
+                    # Try direct paths first
+                    if [[ -f "$source_path" ]]; then
+                        source_file="$source_path"
+                    elif [[ -f "$source_path/$uuid.jsonl" ]]; then
+                        source_file="$source_path/$uuid.jsonl"
+                    else
+                        # Search in project directories
+                        source_file=$(find "$CLAUDE_DIR/projects" -name "${uuid}.jsonl" -path "$(basename "$source_path")*" | head -1)
+                        if [[ -z "$source_file" ]]; then
+                            source_file=$(find "$CLAUDE_DIR/projects" -name "${uuid}.jsonl" | grep -i "$(basename "$source_path")" | head -1)
+                        fi
+                    fi
+
+                    if [[ -f "$target_path" ]]; then
+                        target_file="$target_path"
+                    elif [[ -f "$target_path/$uuid.jsonl" ]]; then
+                        target_file="$target_path/$uuid.jsonl"
+                    else
+                        # Search in project directories
+                        target_file=$(find "$CLAUDE_DIR/projects" -name "${uuid}.jsonl" -path "*(basename "$target_path")*" | head -1)
+                        if [[ -z "$target_file" ]]; then
+                            target_file=$(find "$CLAUDE_DIR/projects" -name "${uuid}.jsonl" | grep -i "$(basename "$target_path")" | head -1)
+                        fi
+                    fi
+
+                    if [[ ! -f "$source_file" ]]; then
+                        _log_error "Source session not found: $source_path"
+                        return 1
+                    fi
+
+                    if [[ ! -f "$target_file" ]]; then
+                        _log_error "Target session not found: $target_path"
+                        return 1
+                    fi
+
+                    # Count lines before merge
+                    local source_lines target_lines_before
+                    source_lines=$(wc -l < "$source_file")
+                    target_lines_before=$(wc -l < "$target_file")
+
+                    _log_info "=== Session Merge Plan ==="
+                    _log_info "UUID:          $uuid"
+                    _log_info "Source:        $source_file"
+                    _log_info "Source lines:  $source_lines"
+                    _log_info "Target:        $target_file"
+                    _log_info "Target lines:  $target_lines_before"
+
+                    if [[ "$INTERACTIVE" == "true" ]]; then
+                        if ! _confirm "Proceed with merge?"; then
+                            _log_info "Merge cancelled"
+                            return 1
+                        fi
+                    fi
+
+                    # Perform merge: append only new lines from source to target
+                    _log_info "=== Executing Merge ==="
+                    _log_info "Merging new lines..."
+
+                    # Temporarily disable exit-on-error for merge logic
+                    set +e
+
+                    # Build hash set of target lines for deduplication
+                    local target_hashes
+                    declare -A target_hashes
+                    while IFS= read -r line; do
+                        if [[ -n "${line}" ]]; then
+                            local hash
+                            hash=$(echo -n "$line" | sha256sum | awk '{print $1}')
+                            target_hashes["$hash"]=1
+                        fi
+                    done < "$target_file"
+
+                    # Append new lines from source
+                    local appended=0
+                    while IFS= read -r line; do
+                        if [[ -n "${line}" ]]; then
+                            local hash
+                            hash=$(echo -n "$line" | sha256sum | awk '{print $1}')
+                            if [[ -z "${target_hashes[$hash]}" ]]; then
+                                echo "$line" >> "$target_file"
+                                target_hashes["$hash"]=1
+                                ((appended++))
+                            fi
+                        fi
+                    done < "$source_file"
+
+                    # Re-enable exit-on-error
+                    set -e
+
+                    # Verify merge
+                    local target_lines_after
+                    target_lines_after=$(wc -l < "$target_file")
+
+                    _log_success "=== Merge Complete ==="
+                    _log_info "Appended $appended new lines to target"
+                    _log_info "Target before: $target_lines_before lines"
+                    _log_info "Target after:  $target_lines_after lines"
+
+                    if [[ "$appended" -eq 0 ]]; then
+                        _log_info "No new lines found - files were identical"
+                    fi
+
+                    return 0
+                    ;;
+
                 *)
                     _log_info "Usage: cm organize <subcommand>"
                     _log_info ""
                     _log_info "Subcommands:"
                     _log_info "  extract <uuid> --from <source> --to <target>"
                     _log_info "    Extract single session by UUID to another directory"
+                    _log_info "  merge <uuid> --from <source> --to <target>"
+                    _log_info "    Merge two session JSONL files, appending new lines only"
                     _log_info ""
-                    _log_info "Aliases: extract -> e"
+                    _log_info "Aliases: extract -> e, merge -> m"
                     _log_info ""
                     _log_info "Future subcommands (not yet implemented):"
                     _log_info "  filter <criteria> --from <source> --to <target>"
                     _log_info "  split <source> --by <date|size|pattern>"
-                    _log_info "  merge <source1> <source2> --to <target>"
                     ;;
             esac
             ;;
