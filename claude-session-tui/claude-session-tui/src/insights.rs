@@ -1,7 +1,7 @@
 //! Intelligent insights extraction and conversation analysis
 
 use crate::{error::Result, models::*};
-use chrono::{Duration, Utc};
+use chrono::Duration;
 use std::collections::{HashMap, HashSet};
 use tracing::info;
 

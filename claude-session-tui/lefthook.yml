@@ -1,0 +1,144 @@
+assert_lefthook_version: ">=1.6.0"
+
+commit-msg:
+  commands:
+    validate-conventional-and-linear:
+      run: |
+        if [ -f "tools/git_hooks/validate_commit.py" ]; then
+          python tools/git_hooks/validate_commit.py .git/COMMIT_EDITMSG
+        else
+          echo "⚠️  validate_commit.py not found, using basic validation"
+          # Basic validation for Linear issue keys
+          if ! grep -qE "(NOS-[0-9]+|feat|fix|docs|style|refactor|test|chore)" .git/COMMIT_EDITMSG; then
+            echo "❌ Commit message must include Linear issue (NOS-XXX) or conventional commit type"
+            exit 1
+          fi
+        fi
+      stage_fixed: true
+
+prepare-commit-msg:
+  commands:
+    inject-linear-from-branch:
+      run: |
+        if [ -f "tools/git_hooks/inject_issue_key.py" ]; then
+          python tools/git_hooks/inject_issue_key.py $1 $2 $3
+        else
+          # Basic Linear issue injection from branch name
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          if [[ "$BRANCH" =~ (NOS-[0-9]+) ]]; then
+            ISSUE_KEY="${BASH_REMATCH[1]}"
+            if [ "$2" != "message" ] && ! grep -q "$ISSUE_KEY" "$1"; then
+              sed -i.bak "1s/^/$ISSUE_KEY: /" "$1"
+            fi
+          fi
+        fi
+      skip: ["merge", "squash"]
+
+pre-commit:
+  parallel: true
+  commands:
+    fmt-py:
+      glob: "python/**/*.py"
+      run: |
+        if command -v black >/dev/null; then
+          black --check {staged_files}
+        else
+          echo "⚠️  black not found, skipping Python format check"
+        fi
+      stage_fixed: true
+
+    lint-py:
+      glob: "python/**/*.py"
+      run: |
+        if command -v ruff >/dev/null; then
+          ruff check {staged_files}
+        else
+          echo "⚠️  ruff not found, skipping Python lint check"
+        fi
+
+    typecheck-py:
+      glob: "python/**/*.py"
+      run: |
+        source .hookrc 2>/dev/null || true
+        if command -v mypy >/dev/null; then
+          mypy {staged_files}
+        else
+          echo "⚠️  mypy not found, skipping Python type check"
+        fi
+
+    rust-fmt:
+      glob: "claude-session-tui/**/*.rs"
+      run: |
+        cd claude-session-tui
+        if command -v cargo >/dev/null; then
+          cargo fmt --check
+        else
+          echo "⚠️  cargo not found, skipping Rust format check"
+        fi
+
+    rust-clippy:
+      glob: "claude-session-tui/**/*.rs"
+      run: |
+        cd claude-session-tui
+        if command -v cargo >/dev/null; then
+          cargo clippy -- -D warnings
+        else
+          echo "⚠️  cargo not found, skipping Rust lint check"
+        fi
+
+    ts-fmt:
+      glob: "federation-integration/**/*.{ts,tsx,js,jsx}"
+      run: |
+        cd federation-integration
+        if [ -f "package.json" ] && command -v bun >/dev/null; then
+          bun prettier --check {staged_files}
+        else
+          echo "⚠️  bun/prettier not found, skipping TS format check"
+        fi
+
+    yaml-lint:
+      glob: "*.{yml,yaml}"
+      run: |
+        if command -v yamllint >/dev/null; then
+          yamllint {staged_files}
+        else
+          echo "⚠️  yamllint not found, skipping YAML validation"
+        fi
+
+    task-validate:
+      glob: "Taskfile.yml"
+      run: |
+        if command -v task >/dev/null; then
+          task --dry --silent help >/dev/null 2>&1 || (echo "❌ Taskfile.yml validation failed" && exit 1)
+        else
+          echo "⚠️  task not found, skipping Taskfile validation"
+        fi
+
+pre-push:
+  commands:
+    validate-linear-online:
+      run: |
+        if [ -f "tools/git_hooks/validate_linear_online.py" ]; then
+          python tools/git_hooks/validate_linear_online.py
+        else
+          echo "⚠️  Linear validation not available - using basic checks"
+          # Basic check for Linear issue format in recent commits
+          if git log --oneline -5 | grep -qE "NOS-[0-9]+"; then
+            echo "✅ Linear issue keys found in recent commits"
+          else
+            echo "⚠️  No Linear issue keys found in recent commits"
+          fi
+        fi
+      env:
+        LINEAR_API_KEY: $LINEAR_API_KEY
+
+    test-suite:
+      run: |
+        echo "🧪 Running test suite before push..."
+        if [ -f "Taskfile.yml" ] && command -v task >/dev/null; then
+          task health
+          task tui:check
+          echo "✅ Basic validation passed"
+        else
+          echo "⚠️  Task runner not available, skipping comprehensive tests"
+        fi

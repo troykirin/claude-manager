@@ -71,9 +71,9 @@ impl SessionParser {
             performance_threshold_ms: 5000, // 5 seconds
             error_recovery: ErrorRecoverySettings {
                 skip_malformed_lines: true,
-                max_consecutive_errors: 50,        // Increased tolerance
-                continue_on_critical_errors: true, // Continue even on critical errors
-                detailed_error_reporting: false,   // Reduce noise in logs
+                max_consecutive_errors: 50,  // Increased tolerance
+                continue_on_critical_errors: true,  // Continue even on critical errors
+                detailed_error_reporting: false,  // Reduce noise in logs
             },
             extraction_config: ExtractionConfig {
                 extract_code_blocks: true,
@@ -256,11 +256,11 @@ impl SessionParser {
 
                 tokio::spawn(async move {
                     let _permit = permit.acquire().await.unwrap();
-
+                    
                     // Add timeout for file processing (30 seconds)
                     let timeout_duration = tokio::time::Duration::from_secs(30);
                     let parse_future = parser.parse_file(path);
-
+                    
                     match tokio::time::timeout(timeout_duration, parse_future).await {
                         Ok(Ok(session)) => {
                             completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -273,9 +273,7 @@ impl SessionParser {
                         }
                         Ok(Err(e)) => {
                             failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            let consec = consecutive_errors
-                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                                + 1;
+                            let consec = consecutive_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                             // Only log if it's becoming a pattern
                             if consec > 3 {
                                 warn!("Multiple consecutive failures: {}", consec);
@@ -284,13 +282,8 @@ impl SessionParser {
                         }
                         Err(_) => {
                             failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            let consec = consecutive_errors
-                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                                + 1;
-                            warn!(
-                                "⏰ File {} timed out after 30s (consecutive errors: {})",
-                                file_number, consec
-                            );
+                            let consec = consecutive_errors.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                            warn!("⏰ File {} timed out after 30s (consecutive errors: {})", file_number, consec);
                             Err(ClaudeSessionError::PerformanceThreshold {
                                 operation: format!("parse_file_{}", file_number),
                                 duration_ms: 30000,
@@ -312,31 +305,26 @@ impl SessionParser {
 
         for (index, result) in results.into_iter().enumerate() {
             let file_number = index + 1;
-
+            
             // Check for smart abort conditions
             let current_failed = failed.load(std::sync::atomic::Ordering::Relaxed);
             let current_completed = completed.load(std::sync::atomic::Ordering::Relaxed);
             let total_processed = current_failed + current_completed;
-
+            
             // Calculate error rate
             let error_rate = if total_processed > 0 {
                 (current_failed as f64) / (total_processed as f64)
             } else {
                 0.0
             };
-
+            
             // Check consecutive errors
-            let _current_consecutive =
-                consecutive_errors.load(std::sync::atomic::Ordering::Relaxed);
-
+            let current_consecutive = consecutive_errors.load(std::sync::atomic::Ordering::Relaxed);
+            
             // Smart abort conditions - disabled for now to be more permissive
             // Only abort if we have 100% failure rate after processing many files
             if total_processed >= 20 && error_rate >= 0.95 {
-                error!(
-                    "Aborting: Error rate {:.1}% after {} files",
-                    error_rate * 100.0,
-                    total_processed
-                );
+                error!("Aborting: Error rate {:.1}% after {} files", error_rate * 100.0, total_processed);
                 return Err(ClaudeSessionError::MultipleParsing {
                     count: current_failed,
                 });
@@ -348,16 +336,13 @@ impl SessionParser {
                     sessions.push(session);
                     // Reduce log spam - only log every 10th file
                     if file_number % 10 == 0 {
-                        info!(
-                            "Progress: {}/{} files processed",
-                            total_processed, total_files
-                        );
+                        info!("Progress: {}/{} files processed", total_processed, total_files);
                     }
                 }
                 Err(e) => {
                     errors += 1;
                     _consecutive_error_count += 1;
-
+                    
                     if !self.error_recovery.continue_on_critical_errors {
                         return Err(e);
                     }
@@ -863,14 +848,11 @@ mod tests {
         let parser = SessionParser::new();
         let mut temp_file = tokio::fs::File::create("test.jsonl").await.unwrap();
         temp_file.write_all(b"invalid json\n").await.unwrap();
-        // Create a valid Claude session format line
-        temp_file.write_all(b"{\"role\":\"user\",\"content\":\"test message\",\"timestamp\":\"2023-01-01T00:00:00Z\",\"model\":\"claude-3\"}\n").await.unwrap();
+        temp_file.write_all(b"{\"role\":\"user\",\"content\":\"test\",\"timestamp\":\"2023-01-01T00:00:00Z\"}\n").await.unwrap();
         drop(temp_file);
 
         let session = parser.parse_file("test.jsonl").await.unwrap();
-        // Parser should handle gracefully (may skip invalid lines or parse valid ones)
-        // Just verify it doesn't crash
-        assert!(session.blocks.len() >= 0);
+        assert_eq!(session.blocks.len(), 1);
 
         tokio::fs::remove_file("test.jsonl").await.unwrap();
     }
@@ -950,21 +932,21 @@ mod tests {
 
                 // Check for tool_calls, attachments metadata
                 // (These are optional in the schema but should parse)
-                // Tools is Vec<ToolInvocation>, can be empty - just verify it parses
-                let _ = &block.tools;
+                // Tools is Vec<ToolInvocation>, can be empty
+                assert!(block.tools.is_empty() || block.tools.len() > 0); // Can be empty or have data
             }
 
             // Check conversation structure
             if session.blocks.len() > 1 {
-                // Note: Roles may not strictly alternate in real Claude sessions
-                // (e.g., multiple user messages before assistant response)
-                // So we just verify we have a mix of roles
-                let has_user = session.blocks.iter().any(|b| b.role == Role::User);
-                let has_assistant = session.blocks.iter().any(|b| b.role == Role::Assistant);
-                assert!(
-                    has_user || has_assistant,
-                    "Session should have at least some messages"
-                );
+                for i in 1..session.blocks.len() {
+                    // Check roles alternate (user -> assistant -> user -> etc.)
+                    let prev_role = &session.blocks[i - 1].role;
+                    let curr_role = &session.blocks[i].role;
+                    assert_ne!(
+                        prev_role, curr_role,
+                        "Roles should alternate in conversation"
+                    );
+                }
             }
         }
     }
@@ -1034,9 +1016,11 @@ mod tests {
                     }
                 }
 
-                // Note: Some demo data may have empty or minimal content
-                // Just verify we can parse it without crashing
-                let _ = &block.content.raw_text;
+                // Message content should be reasonable length
+                assert!(
+                    block.content.raw_text.len() > 10,
+                    "Messages should be substantial"
+                );
 
                 // Tools can be empty Vec, which is fine
             }

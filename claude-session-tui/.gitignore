@@ -1,0 +1,72 @@
+# Rust build artifacts
+/target/
+target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Build artifacts
+/dist/
+/build/
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Dependencies
+/node_modules/
+npm-debug.log
+yarn-error.log
+
+# Test and benchmark artifacts
+/benches/target/
+/tests/tmp/
+*.profraw
+*.profdata
+
+# Temporary files
+.test.jsonl
+test.jsonl
+*.tmp
+*.bak
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# GitHub workflows backups
+.github/workflows/*.bak
+
+# Secrets and credentials
+secrets.json
+credentials.json
+.aws/
+.ssh/
+
+# Project-specific temporary files
+demo_output/
+temp/
+.tmp/

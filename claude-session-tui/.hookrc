@@ -1,0 +1,71 @@
+#!/bin/bash
+# Claude Manager Development Environment Configuration
+# This file sets up the development environment with standardized configuration
+
+# Activate Python virtual environment for TUI development
+if [ -d "python/.venv" ]; then
+    source python/.venv/bin/activate
+fi
+
+# Set Python path for Claude Manager TUI
+export PYTHONPATH=/Users/tryk/nabia/claude-manager/python:/Users/tryk/nabia/claude-manager:$PYTHONPATH
+
+# =============================================================================
+# CLAUDE MANAGER STANDARDIZED CONFIGURATION
+# =============================================================================
+
+# Set development environment
+export CLAUDE_MANAGER_ENVIRONMENT=development
+
+# Core configuration
+export CLAUDE_MANAGER_ROOT=/Users/tryk/nabia/claude-manager
+export CLAUDE_DIR=$HOME/.claude
+export CLAUDE_BACKUP_STRATEGY=file
+export CLAUDE_INTERACTIVE=true
+export CLAUDE_DRY_RUN=false
+
+# TUI configuration
+export CLAUDE_TUI_ENABLED=true
+export CLAUDE_TUI_PYTHON_PATH=/Users/tryk/nabia/claude-manager/python
+
+# Rust TUI configuration  
+export CLAUDE_SESSION_TUI_DIR=/Users/tryk/nabia/claude-manager/claude-session-tui
+
+# Federation integration
+export CLAUDE_FEDERATION_ENABLED=true
+export CLAUDE_FEDERATION_AGENT_ID=claude-manager-dev
+export CLAUDE_FEDERATION_NAMESPACE=claude-sessions
+
+# Task runner configuration
+export TASK_ROOT=/Users/tryk/nabia/claude-manager
+export TUI_DIR=./claude-session-tui
+export BIN_DIR=$HOME/.local/bin
+
+# Linear integration (for session migration tracking)
+export CLAUDE_LINEAR_ENABLED=false
+export CLAUDE_LINEAR_PROJECT_KEY="NOS"
+
+# Legacy Code Retirement Pattern
+export CLAUDE_ARCHIVE_ENABLED=true
+export CLAUDE_ARCHIVE_CMD="cm archive --directory"
+
+# =============================================================================
+# DEVELOPMENT TOOLS
+# =============================================================================
+
+# Ensure development tools are available
+if command -v bun >/dev/null; then
+    export CLAUDE_MANAGER_RUNTIME=bun
+elif command -v node >/dev/null; then
+    export CLAUDE_MANAGER_RUNTIME=node
+fi
+
+if command -v cargo >/dev/null; then
+    export CLAUDE_RUST_AVAILABLE=true
+fi
+
+if command -v python3 >/dev/null; then
+    export CLAUDE_PYTHON_AVAILABLE=true
+fi
+
+echo "hookrc: loaded development environment (Claude Manager)"

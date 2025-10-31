@@ -41,10 +41,7 @@ use tracing::info;
 
 /// Initialize the Claude session parser with logging
 pub fn init() -> anyhow::Result<()> {
-    // Only log if RUST_LOG is explicitly set (for debugging)
-    if std::env::var("RUST_LOG").is_ok() {
-        info!("Claude Session TUI parser initialized");
-    }
+    info!("Claude Session TUI parser initialized");
     Ok(())
 }
 

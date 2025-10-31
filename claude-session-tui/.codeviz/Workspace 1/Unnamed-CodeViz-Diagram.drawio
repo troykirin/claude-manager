@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+        <mxfile host="codeviz.app" modified="2025-09-09T18:33:24.044Z" agent="CodeViz Exporter" version="14.6.5" type="device">
+          <diagram id="codeviz-diagram" name="System Diagram">
+            <mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+              <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="claude_tui_app_boundary" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="claude_session_tui_system">
+                  <mxGeometry x="611.0329209697669" y="-7.137722795968898" width="600" height="360" as="geometry"/>
+                </mxCell>
+                <mxCell id="claude_tui_app_boundary_label" value="Claude TUI Application" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="claude_session_tui_system">
+                  <mxGeometry x="619.0329209697669" y="0.862277204031102" width="524" height="24" as="geometry"/>
+                </mxCell>
+<mxCell id="federation_service_boundary" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="federation_integration_system">
+                  <mxGeometry x="1190" y="-45.5" width="643" height="279" as="geometry"/>
+                </mxCell>
+                <mxCell id="federation_service_boundary_label" value="Federation Service" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="federation_integration_system">
+                  <mxGeometry x="1198" y="-37.5" width="567" height="24" as="geometry"/>
+                </mxCell>
+<mxCell id="cli_application_boundary" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="claude_manager_cli_system">
+                  <mxGeometry x="40" y="-50.5" width="564" height="269" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli_application_boundary_label" value="CLI Application" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="claude_manager_cli_system">
+                  <mxGeometry x="48" y="-42.5" width="488" height="24" as="geometry"/>
+                </mxCell>
+<mxCell id="claude_session_tui_system" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="claude_manager_enterprise">
+                  <mxGeometry x="611.0329209697669" y="-31.862277204031102" width="635" height="447" as="geometry"/>
+                </mxCell>
+                <mxCell id="claude_session_tui_system_label" value="Claude Session TUI System" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="claude_manager_enterprise">
+                  <mxGeometry x="619.0329209697669" y="-23.862277204031102" width="559" height="24" as="geometry"/>
+                </mxCell>
+<mxCell id="federation_integration_system" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="claude_manager_enterprise">
+                  <mxGeometry x="1190" y="6.5" width="675" height="366" as="geometry"/>
+                </mxCell>
+                <mxCell id="federation_integration_system_label" value="Federation Integration System" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="claude_manager_enterprise">
+                  <mxGeometry x="1198" y="14.5" width="599" height="24" as="geometry"/>
+                </mxCell>
+<mxCell id="claude_manager_cli_system" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="claude_manager_enterprise">
+                  <mxGeometry x="40" y="11.5" width="595" height="356" as="geometry"/>
+                </mxCell>
+                <mxCell id="claude_manager_cli_system_label" value="Claude Manager CLI System" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="claude_manager_enterprise">
+                  <mxGeometry x="48" y="19.5" width="519" height="24" as="geometry"/>
+                </mxCell>
+<mxCell id="claude_manager_enterprise" value="" style="html=1;whiteSpace=wrap;container=1;fillColor=#dae8fc;strokeColor=#6c8ebf;dashed=1;fillOpacity=20;strokeWidth=2;containerType=none;recursiveResize=0;movable=1;resizable=1;autosize=0;dropTarget=0" vertex="1" parent="temp-wrapper-c746962b-d654-4ce9-af5e-c81099e77afe">
+                  <mxGeometry x="20" y="106" width="1865" height="625" as="geometry"/>
+                </mxCell>
+                <mxCell id="claude_manager_enterprise_label" value="Claude Manager Enterprise" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;labelBackgroundColor=white;spacing=5" vertex="1" parent="temp-wrapper-c746962b-d654-4ce9-af5e-c81099e77afe">
+                  <mxGeometry x="28" y="114" width="1789" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="temp-wrapper-c746962b-d654-4ce9-af5e-c81099e77afe" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="1">
+                      <mxGeometry x="0" y="0" width="120" height="60" as="geometry"/>
+                    </mxCell>
+<mxCell id="session_file_store" value="Session File Store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_manager_enterprise">
+                      <mxGeometry x="800.5" y="544" width="124" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="session_api" value="Session API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_tui_app_boundary">
+                      <mxGeometry x="231.25" y="188" width="87" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="session_parser" value="Session Parser" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_tui_app_boundary">
+                      <mxGeometry x="159" y="279" width="105" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="block_extractor" value="Block Extractor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_tui_app_boundary">
+                      <mxGeometry x="284" y="279" width="108" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="insights_analyzer" value="Insights Analyzer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_tui_app_boundary">
+                      <mxGeometry x="20" y="279" width="119" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="search_engine" value="Search Engine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_tui_app_boundary">
+                      <mxGeometry x="412" y="279" width="103" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="user_interface" value="User Interface" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="claude_tui_app_boundary">
+                      <mxGeometry x="223.75" y="107" width="102" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="federation_client" value="Federation Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="federation_service_boundary">
+                      <mxGeometry x="202.5" y="107" width="120" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="agent_selector" value="Agent Selector" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="federation_service_boundary">
+                      <mxGeometry x="139" y="198" width="106" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="thread_transformer" value="Thread Transformer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="federation_service_boundary">
+                      <mxGeometry x="265" y="198" width="136" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="task_exporter" value="Task Exporter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="federation_service_boundary">
+                      <mxGeometry x="20" y="198" width="99" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="resilience_manager" value="Resilience Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="federation_service_boundary">
+                      <mxGeometry x="421" y="198" width="134" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="path_migration_logic" value="Path Migration Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="cli_application_boundary">
+                      <mxGeometry x="335" y="107" width="140" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="project_management_logic" value="Project Management Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="cli_application_boundary">
+                      <mxGeometry x="137" y="107" width="178" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="backup_logic" value="Backup Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="cli_application_boundary">
+                      <mxGeometry x="20" y="107" width="97" height="41" as="geometry"/>
+                    </mxCell>
+<mxCell id="file_system_utilities" value="File System Utilities" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5" vertex="1" parent="cli_application_boundary">
+                      <mxGeometry x="158.5" y="188" width="135" height="41" as="geometry"/>
+                    </mxCell>
+                <mxCell id="edge-e-session_api-session_parser" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="session_api" target="session_parser">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-session_api-session_parser_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-session_api-session_parser">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-session_api-block_extractor" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="session_api" target="block_extractor">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-session_api-block_extractor_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-session_api-block_extractor">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-session_api-insights_analyzer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="session_api" target="insights_analyzer">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-session_api-insights_analyzer_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-session_api-insights_analyzer">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-session_api-search_engine" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="session_api" target="search_engine">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-session_api-search_engine_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-session_api-search_engine">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-user_interface-session_api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="user_interface" target="session_api">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-user_interface-session_api_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-user_interface-session_api">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-federation_client-agent_selector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="federation_client" target="agent_selector">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-federation_client-agent_selector_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-federation_client-agent_selector">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-federation_client-thread_transformer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="federation_client" target="thread_transformer">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-federation_client-thread_transformer_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-federation_client-thread_transformer">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-federation_client-task_exporter" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="federation_client" target="task_exporter">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-federation_client-task_exporter_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-federation_client-task_exporter">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-federation_client-resilience_manager" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="federation_client" target="resilience_manager">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-federation_client-resilience_manager_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-federation_client-resilience_manager">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-path_migration_logic-file_system_utilities" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="path_migration_logic" target="file_system_utilities">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-path_migration_logic-file_system_utilities_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-path_migration_logic-file_system_utilities">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-project_management_logic-file_system_utilities" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="project_management_logic" target="file_system_utilities">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-project_management_logic-file_system_utilities_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-project_management_logic-file_system_utilities">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-backup_logic-file_system_utilities" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="backup_logic" target="file_system_utilities">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-backup_logic-file_system_utilities_label" value="Uses | Calls" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-backup_logic-file_system_utilities">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-claude_tui_app_boundary-session_file_store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="claude_tui_app_boundary" target="session_file_store">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-claude_tui_app_boundary-session_file_store_label" value="Reads session data from | Reads" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-claude_tui_app_boundary-session_file_store">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-federation_service_boundary-session_file_store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="federation_service_boundary" target="session_file_store">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-federation_service_boundary-session_file_store_label" value="Writes/Reads session data to/from | Writes/Reads" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-federation_service_boundary-session_file_store">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+<mxCell id="edge-e-cli_application_boundary-session_file_store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#808080;strokeWidth=2;jumpStyle=arc;jumpSize=10;spacing=15;labelBackgroundColor=white;labelBorderColor=none" edge="1" parent="1" source="cli_application_boundary" target="session_file_store">
+                    <mxGeometry relative="1" as="geometry"/>
+                  </mxCell>
+                  <mxCell id="edge-e-cli_application_boundary-session_file_store_label" value="Manages session files in | Manages" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="edge-e-cli_application_boundary-session_file_store">
+                    <mxGeometry x="-0.2" y="10" relative="1" as="geometry">
+                      <mxPoint as="offset"/>
+                    </mxGeometry>
+                  </mxCell>
+              </root>
+            </mxGraphModel>
+          </diagram>
+        </mxfile>

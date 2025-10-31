@@ -4,11 +4,6 @@ version = "0.1.0"
 edition = "2021"
 description = "High-performance JSONL parser for Claude session files"
 authors = ["Nabia AI Stack"]
-license = "Apache-2.0"
-repository = "https://github.com/anthropics/claude-session-tui"
-homepage = "https://github.com/anthropics/claude-session-tui"
-keywords = ["claude", "session", "tui", "parser", "jsonl"]
-categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
@@ -28,8 +23,6 @@ rayon = "1.8"
 walkdir = "2.4"
 futures = "0.3"
 num_cpus = "1.16"
-dirs = "5.0"
-shellexpand = "3.1"
 
 # V2 Shadow Renaissance Architecture dependencies
 async-trait = { version = "0.1", optional = true }
@@ -70,7 +63,6 @@ path = "src/bin/benchmark.rs"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 tokio-test = "0.4"
-filetime = "0.2"
 
 [[bench]]
 name = "parser_benchmarks"
