@@ -1,0 +1,7 @@
+{
+  "session_id": "fixture-path-mismatch",
+  "working_directory": "/nonexistent/invalid/path",
+  "corruption_patterns": ["invalid_path"],
+  "health_score": 70,
+  "timestamp": "2025-11-02T00:00:00Z"
+}

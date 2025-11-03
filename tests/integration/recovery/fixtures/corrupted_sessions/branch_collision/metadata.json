@@ -1,0 +1,8 @@
+{
+  "session_id": "fixture-branch-collision",
+  "current_branch": "feature/test",
+  "branches": ["main", "feature/test", "feature/test"],
+  "corruption_patterns": ["duplicate_branch"],
+  "health_score": 65,
+  "timestamp": "2025-11-02T00:00:00Z"
+}

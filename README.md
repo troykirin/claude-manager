@@ -27,6 +27,25 @@ This tool automates the complete migration workflow:
 - 📊 **Detailed Reporting**: See exactly what changed
 - 🔍 **Auto-Detection**: Automatically finds existing paths in sessions
 - ⚡ **Dry Run Mode**: Preview changes before applying
+- 🏥 **Health Diagnostics**: Detect session corruption patterns and assess health
+
+## Requirements
+
+- Bash 4.0+
+- Claude Code (stores sessions in `~/.claude/`)
+- Optional: bats-core for running tests
+
+## Optional Features
+
+The tool includes **optional** federation integration capabilities for advanced multi-system coordination:
+- Session recovery audit trails (Loki logging)
+- Issue creation from sessions (Linear integration)
+- Event streaming (NATS messaging)
+- Distributed state management (SurrealDB)
+
+**These are completely OPTIONAL.** The core tool works perfectly standalone for all session management, migration, and diagnostics features without any external services.
+
+To enable federation features, see `federation-integration/README.md`.
 
 ## Installation
 
@@ -81,6 +100,9 @@ export CLAUDE_DRY_RUN="false"
 ### Basic Commands
 
 ```bash
+# Diagnose session health (detects corruption patterns)
+cm diagnose [session-uuid]
+
 # Migrate session paths (interactive)
 cm migrate
 
@@ -92,6 +114,70 @@ cm full
 
 # List projects and sessions
 cm list
+
+# Verify project path consistency
+cm verify <project-dir>
+
+# System health check
+cm health
+```
+
+### Health Diagnostics
+
+The `diagnose` command detects session corruption patterns and provides a health assessment:
+
+```bash
+# Diagnose current active session
+cm diagnose
+
+# Diagnose specific session by UUID
+cm diagnose 12345678-1234-1234-1234-123456789abc
+
+# Get JSON output for automation
+DIAGNOSE_JSON=true cm diagnose <session-uuid>
+```
+
+**Detected Corruption Patterns:**
+
+1. **Branch Collision**: Session exists in multiple project directories
+2. **Migration Race**: Multiple copies or backup files indicate interrupted migration
+3. **Cross-System Inconsistency**: Session UUID present in some systems but not others
+4. **Path Mismatch**: Project directory name doesn't match paths in session files
+5. **Orphaned Todos**: Todo files exist without corresponding project
+6. **Timestamp Drift**: Large time difference between project and todo files (>1 hour)
+
+**Health Scores:**
+- **100-90**: HEALTHY ✅ - No issues detected
+- **89-70**: MINOR_ISSUES ⚠ - Minor problems that should be monitored
+- **69-50**: DEGRADED ⚠ - Multiple issues affecting functionality
+- **49-30**: CORRUPTED ❌ - Significant corruption requiring repair
+- **29-0**: CRITICAL ❌ - Severe corruption requiring manual intervention
+
+**Example Output:**
+
+```bash
+$ cm diagnose current
+
+=== Session Health Diagnosis ===
+Session UUID: 12345678-1234-1234-1234-123456789abc
+
+Scanning for corruption patterns...
+  ✓ No branch collision
+  ✓ No migration race
+  ✗ Cross-system issues: orphaned todos (3 files)
+  ✓ Path consistency OK
+  ✗ Orphaned todos: 3 orphaned todo files
+  ✓ Timestamps consistent
+
+Running validation checks...
+  ✓ Process safety OK
+  ⚠ Cross-system state: no todos
+  ✓ Path consistency OK
+
+=== Health Assessment ===
+Health Score: 60/100 - DEGRADED ⚠
+Session has multiple issues that may affect functionality
+Recommendation: Consider running recovery procedures
 ```
 
 ### Advanced Usage
@@ -117,10 +203,13 @@ CLAUDE_DRY_RUN=true cm migrate "/old/path" "/new/path"
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
+| `diagnose` | `diag` | Analyze session health and detect corruption |
 | `migrate` | `m`, `cm-migrate` | Update session paths |
 | `move` | `mv`, `cm-move` | Move sessions between projects |
 | `full` | `f`, `cm-full` | Complete migration (paths + move) |
 | `list` | `ls`, `l`, `cm-list` | List projects or sessions |
+| `verify` | `v` | Check project path consistency |
+| `health` | `doctor` | System health check |
 | `config` | `cfg` | Show current configuration |
 | `help` | `h` | Show help information |
 
@@ -210,4 +299,4 @@ Feel free to submit issues and pull requests to improve the tool.
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is open source and available under the Apache 2.0 License.

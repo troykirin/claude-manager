@@ -869,7 +869,7 @@ _suggest_project_dir_for() {
     # Standard case: Encode the source path to project path
     # Convert absolute path to Claude Code project naming convention
     # Claude uses double dashes for dots in paths and single dash for path separators
-    # Example: /Users/tryk/.claude/sync -> -Users-tryk--claude-sync
+    # Example: /home/user/.claude/sync -> -home-user--claude-sync
     local encoded_name
     encoded_name=$(echo "$new_path" | sed 's|^/||' | sed 's|\.|-|g' | sed 's|/|-|g')
     echo "$CLAUDE_DIR/projects/-${encoded_name}"
@@ -2132,6 +2132,20 @@ claude_manager() {
             esac
             ;;
             
+        "diagnose"|"diag")
+            # Session health diagnostics
+            local session_uuid="${positional_args[0]:-current}"
+
+            # Load diagnostics module
+            if [[ ! -f "${BASH_SOURCE[0]%/*}/lib/diagnostics.sh" ]]; then
+                _log_error "Diagnostics module not found: ${BASH_SOURCE[0]%/*}/lib/diagnostics.sh"
+                return 1
+            fi
+
+            source "${BASH_SOURCE[0]%/*}/lib/diagnostics.sh"
+            diagnose_session_health "$session_uuid"
+            ;;
+
         "health"|"doctor")
             # System health check
             _log_info "=== Claude Manager Health Check ==="
@@ -2225,6 +2239,50 @@ claude_manager() {
             fi
             ;;
 
+        "repair"|"r")
+            # REPAIR mode: Safe session duplication with corruption isolation
+            local session_id="${positional_args[0]:-}"
+
+            if [[ -z "$session_id" ]]; then
+                if [[ "$INTERACTIVE" == "true" ]]; then
+                    _log_info "=== REPAIR Mode: Session Duplication ==="
+                    _log_info "Enter session UUID to repair:"
+                    read -r session_id
+                else
+                    _log_error "Usage: cm repair <session_uuid>"
+                    return 1
+                fi
+            fi
+
+            # Validate UUID format (basic check)
+            if [[ ! "$session_id" =~ ^[a-f0-9-]{36}$ ]]; then
+                _log_error "Invalid UUID format: $session_id"
+                _log_info "Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                return 1
+            fi
+
+            # Load repair module
+            local repair_lib="${BASH_SOURCE[0]%/*}/lib/repair.sh"
+            if [[ ! -f "$repair_lib" ]]; then
+                _log_error "REPAIR module not found: $repair_lib"
+                return 1
+            fi
+
+            # Source repair module
+            source "$repair_lib"
+
+            # Execute repair
+            if repair_session "$session_id"; then
+                _log_success "=== REPAIR completed successfully ==="
+                _log_info "New session: $REPAIR_NEW_UUID"
+                _log_info "Backup: $REPAIR_BACKUP_DIR"
+            else
+                _log_error "=== REPAIR failed ==="
+                _log_info "Check logs above for details"
+                return 1
+            fi
+            ;;
+
         "config"|"cfg")
             _log_info "Current configuration:"
             echo "  CLAUDE_DIR: $CLAUDE_DIR"
@@ -2256,6 +2314,10 @@ claude_manager() {
             echo ""
             echo "  verify <project_dir>"
             echo "    Check project for path consistency and report mismatches"
+            echo ""
+            echo "  repair <session_uuid>"
+            echo "    REPAIR mode: Safe session duplication with corruption isolation"
+            echo "    Creates new session with clean state, archives original"
             echo ""
             echo "  health"
             echo "    System health check - validate tools, permissions, and setup"

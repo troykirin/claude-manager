@@ -1,0 +1,8 @@
+{
+  "session_id": "fixture-cross-system",
+  "git_branch": "main",
+  "claude_context_branch": "feature/dev",
+  "corruption_patterns": ["branch_mismatch"],
+  "health_score": 55,
+  "timestamp": "2025-11-02T00:00:00Z"
+}
