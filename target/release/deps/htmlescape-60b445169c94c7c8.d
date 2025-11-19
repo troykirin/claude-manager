@@ -1,0 +1,11 @@
+/Users/tryk/nabia/tools/claude-manager/target/release/deps/htmlescape-60b445169c94c7c8.d: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/encode.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/decode.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/entities.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/io_support.rs
+
+/Users/tryk/nabia/tools/claude-manager/target/release/deps/libhtmlescape-60b445169c94c7c8.rlib: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/encode.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/decode.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/entities.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/io_support.rs
+
+/Users/tryk/nabia/tools/claude-manager/target/release/deps/libhtmlescape-60b445169c94c7c8.rmeta: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/encode.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/decode.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/entities.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/io_support.rs
+
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/lib.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/encode.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/decode.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/entities.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/htmlescape-0.3.1/src/io_support.rs:

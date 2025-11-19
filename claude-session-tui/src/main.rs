@@ -128,6 +128,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut data_dir = default_dir.clone();
     let mut time_filter: Option<Duration> = None;
+    let mut list_mode = false;
     {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
@@ -138,19 +139,24 @@ async fn main() -> anyhow::Result<()> {
                     println!("Options:");
                     println!("  -d, --dir <path>     Directory with .jsonl files (default: ~/.claude/projects)");
                     println!("  --since <time>       Only load sessions from the past <time> (e.g., 7d, 1w, 24h)");
+                    println!("  --list               List sessions as text (non-interactive mode)");
                     println!("  -h, --help           Show this help message\n");
                     println!("Examples:");
                     println!("  claude-session-tui                        # Load all sessions from ~/.claude/projects");
                     println!("  claude-session-tui --since 7d             # Load only past 7 days (fast!)");
                     println!(
-                        "  claude-session-tui --since 1w --dir ~/custom  # Custom dir, past week\n"
+                        "  claude-session-tui --since 1w --dir ~/custom  # Custom dir, past week"
                     );
+                    println!("  claude-session-tui --list                  # List sessions as text\n");
                     println!("Time format: <number><unit>");
                     println!("  d  = days (e.g., 7d = past 7 days)");
                     println!("  w  = weeks (e.g., 2w = past 2 weeks)");
                     println!("  h  = hours (e.g., 24h = past 24 hours)");
                     println!("  m  = minutes (e.g., 30m = past 30 minutes)");
                     return Ok(());
+                }
+                "--list" => {
+                    list_mode = true;
                 }
                 "-d" | "--dir" => {
                     if let Some(val) = args.next() {
@@ -223,6 +229,51 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+    }
+
+    // Check if we have a TTY for interactive mode
+    if !list_mode && !atty::is(atty::Stream::Stdout) {
+        eprintln!("Error: claude-session-tui requires an interactive terminal");
+        eprintln!("Tip: Run this directly in your terminal, or use --list for non-interactive mode");
+        std::process::exit(1);
+    }
+
+    // Handle non-interactive list mode
+    if list_mode {
+        // Load sessions with optional time filter
+        let files = if let Some(duration) = time_filter {
+            match filter_recent_files(&data_dir, Some(duration)).await {
+                Ok(f) => f,
+                Err(err) => {
+                    eprintln!("Failed to filter sessions: {}", err);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            use walkdir::WalkDir;
+            WalkDir::new(&data_dir)
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.eq_ignore_ascii_case("jsonl"))
+                        .unwrap_or(false)
+                })
+                .map(|entry| entry.path().to_path_buf())
+                .collect()
+        };
+
+        // List sessions as text (just show file names, sorted)
+        let mut files_sorted = files;
+        files_sorted.sort();
+        for (idx, file) in files_sorted.iter().enumerate() {
+            println!("[{}] {}", idx + 1, file.display());
+        }
+
+        return Ok(());
     }
 
     // Setup terminal guard for proper cleanup

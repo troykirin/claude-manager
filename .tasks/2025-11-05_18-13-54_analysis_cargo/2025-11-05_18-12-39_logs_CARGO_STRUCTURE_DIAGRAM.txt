@@ -1,0 +1,203 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║        CARGO BINARY AMBIGUITY - VISUAL REPOSITORY STRUCTURE                     ║
+║  Repository: /Users/tryk/nabia/tools/claude-manager                            ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌─ REPOSITORY ROOT ───────────────────────────────────────────────────────────────┐
+│  /Users/tryk/nabia/tools/claude-manager/                                        │
+│                                                                                  │
+│  ❌ NO Cargo.toml here (PROBLEM #1: Missing Root)                              │
+│  ⚠️  Multiple shell scripts: claude-manager.sh, run-tui.sh, etc.               │
+│  ⚠️  Multiple documentation files                                              │
+│  ⚠️  Multiple directories: federation-integration/, python/, tests/, etc.      │
+│                                                                                  │
+│  ├─ SUBPROJECT: claude-session-tui/                                             │
+│  │  │                                                                            │
+│  │  ├─ ✅ Cargo.toml (CARGO.TOML #1)                                           │
+│  │  │  │  name = "claude-session-tui"                                          │
+│  │  │  │  version = "0.1.0"                                                    │
+│  │  │  │                                                                         │
+│  │  │  ├─ [features]                                                            │
+│  │  │  │  default = []  ⚠️  PROBLEM #4: Empty defaults                        │
+│  │  │  │  tui = []                                                             │
+│  │  │  │  v2 = [async-trait, pin-project]                                     │
+│  │  │  │  shadow = [v2]                                                        │
+│  │  │  │                                                                         │
+│  │  │  ├─ [[bin]] #1                                                            │
+│  │  │  │  name = "claude-session-tui"                                          │
+│  │  │  │  path = "src/main.rs"                                                 │
+│  │  │  │  required-features = ["tui"]  ⚠️  REQUIRES feature                   │
+│  │  │  │                                                                         │
+│  │  │  ├─ [[bin]] #2  ⚠️  PROBLEM #3: Multiple binaries, no default           │
+│  │  │  │  name = "benchmark"                                                   │
+│  │  │  │  path = "src/bin/benchmark.rs"                                        │
+│  │  │  │  [no required-features]                                               │
+│  │  │  │                                                                         │
+│  │  │  └─ [lib]                                                                 │
+│  │  │     name = "claude_session_tui"                                          │
+│  │  │     path = "src/lib.rs"                                                  │
+│  │  │                                                                            │
+│  │  ├─ src/ (ROOT LEVEL)                                                        │
+│  │  │  ├─ main.rs      ← Binary target (requires "tui" feature)               │
+│  │  │  ├─ lib.rs       ← Library target                                       │
+│  │  │  ├─ bin/                                                                 │
+│  │  │  │  └─ benchmark.rs  ← Binary target (no features required)             │
+│  │  │  ├─ api.rs                                                              │
+│  │  │  ├─ parser.rs                                                           │
+│  │  │  ├─ error.rs                                                            │
+│  │  │  ├─ models.rs                                                           │
+│  │  │  ├─ extractor.rs                                                        │
+│  │  │  ├─ insights.rs                                                         │
+│  │  │  ├─ search/                                                             │
+│  │  │  └─ ui/                                                                 │
+│  │  │                                                                           │
+│  │  ├─ tests/                                                                  │
+│  │  ├─ benches/                                                               │
+│  │  ├─ docs/                                                                  │
+│  │  └─ demo_projects/                                                         │
+│  │                                                                              │
+│  │  └─ NESTED SUBPROJECT: claude-session-tui/  ⚠️  PROBLEM #2: Nested dup   │
+│  │     │                                                                        │
+│  │     ├─ ❌ Cargo.toml (CARGO.TOML #2 - DUPLICATE)                          │
+│  │     │  │  name = "claude-session-tui"  [SAME]                             │
+│  │     │  │  version = "0.1.0"             [SAME]                             │
+│  │     │  │  [[bin]] and [lib]             [NEARLY SAME]                      │
+│  │     │  │  path = "src/main.rs"  ⚠️  PROBLEMATIC: Points to parent src   │
+│  │     │  │                                                                     │
+│  │     │  └─ This Cargo.toml should NOT EXIST                                │
+│  │     │                                                                        │
+│  │     ├─ src/  ⚠️  These files come from PARENT directory                   │
+│  │     ├─ tests/                                                              │
+│  │     └─ [other files]                                                       │
+│  │                                                                              │
+│  ├─ federation-integration/  (TypeScript/Node project)                         │
+│  ├─ python/                  (Python utilities)                               │
+│  ├─ tests/                   (Shell integration tests)                        │
+│  └─ [documentation + shell scripts]                                           │
+│                                                                                 │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        CARGO.TOML RESOLUTION FLOW                               ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+When you run: $ cargo run
+
+1. Cargo looks for Cargo.toml starting from current directory
+   └─ /Users/tryk/nabia/tools/claude-manager/Cargo.toml  ❌ NOT FOUND
+
+2. Cargo searches parent directories
+   └─ Keeps going up... (probably finds one eventually in /Users/tryk/nabia/)
+
+3. User gets confused or error occurs ❌
+
+
+When you run: $ cd /Users/tryk/nabia/tools/claude-manager/claude-session-tui && cargo run
+
+1. Cargo finds: ./Cargo.toml (CARGO.TOML #1) ✓
+
+2. Cargo parses [[bin]] definitions:
+   ├─ Binary "claude-session-tui" 
+   │  └─ Requires feature "tui" (NOT enabled by default)
+   └─ Binary "benchmark"
+      └─ No feature requirements
+
+3. Cargo determines which binary to run for "cargo run":
+   ⚠️  AMBIGUOUS: Two binaries found
+   ❌ ERROR: "error: `cargo run` requires that a package only have 
+              one binary target at the root of the src directory"
+
+4. OR if only one binary is buildable:
+   ❌ ERROR: Feature "tui" required but not enabled
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        THE FOUR PROBLEMS AT A GLANCE                           ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+PROBLEM #1: Missing Root Cargo.toml
+  Location: /Users/tryk/nabia/tools/claude-manager/
+  Impact:   Can't run cargo commands from repo root
+  Fix:      Create Cargo.toml at repository root
+
+
+PROBLEM #2: Duplicate Nested Cargo.toml
+  Locations: 
+    - /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml
+    - /Users/tryk/nabia/tools/claude-manager/claude-session-tui/claude-session-tui/Cargo.toml
+  Impact:   Confusing, non-standard, both define same package
+  Fix:      Delete the nested one, keep only one
+
+
+PROBLEM #3: Multiple Binaries With No Default
+  In: /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml
+  [[bin]] list:
+    - "claude-session-tui" (requires feature)
+    - "benchmark" (no features)
+  Impact:   Cargo can't determine which to run with "cargo run"
+  Fix:      Either keep only ONE binary in src/ OR use workspace structure
+
+
+PROBLEM #4: Feature Requirements Mismatch
+  In: /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml
+  default = []                          ← No features enabled
+  [[bin]] required-features = ["tui"]   ← But main binary NEEDS tui
+  Impact:   Can't build without explicitly enabling "tui" feature
+  Fix:      Set default = ["tui"] to auto-enable
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                           RECOMMENDED STRUCTURE                                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+OPTION A: Flatten to single project at root
+┌─────────────────────────────────────────────────────────────────┐
+│ /Users/tryk/nabia/tools/claude-manager/                         │
+│ ├─ Cargo.toml (NEW) ← Create this                              │
+│ ├─ src/                                                         │
+│ │  ├─ main.rs                                                  │
+│ │  ├─ lib.rs                                                   │
+│ │  ├─ bin/benchmark.rs                                         │
+│ │  └─ [modules]                                                │
+│ ├─ tests/                                                       │
+│ ├─ docs/                                                        │
+│ └─ [other dirs]                                                │
+└─────────────────────────────────────────────────────────────────┘
+
+
+OPTION B: Workspace with subproject
+┌─────────────────────────────────────────────────────────────────┐
+│ /Users/tryk/nabia/tools/claude-manager/                         │
+│ ├─ Cargo.toml (NEW workspace root)  ← Create this              │
+│ │  [workspace]                                                  │
+│ │  members = ["claude-session-tui"]                            │
+│ │                                                               │
+│ └─ claude-session-tui/                                          │
+│    ├─ Cargo.toml (KEEP - only this one)  ← Delete nested one  │
+│    ├─ src/                                                     │
+│    └─ [project files]                                          │
+└─────────────────────────────────────────────────────────────────┘
+
+
+OPTION C: Keep claude-session-tui/ subproject and configure properly
+┌─────────────────────────────────────────────────────────────────┐
+│ /Users/tryk/nabia/tools/claude-manager/                         │
+│ ├─ Cargo.toml (NEW workspace root)  ← Create this              │
+│ │  [workspace]                                                  │
+│ │  members = ["claude-session-tui"]                            │
+│ │                                                               │
+│ └─ claude-session-tui/                                          │
+│    ├─ Cargo.toml (KEEP, with fixes)                            │
+│    │  [features]                                               │
+│    │  default = ["tui"]  ← FIX THIS                            │
+│    │  tui = []                                                 │
+│    │                                                            │
+│    ├─ src/                                                     │
+│    │  ├─ main.rs         ← Keep as main binary               │
+│    │  ├─ lib.rs                                               │
+│    │  └─ bin/benchmark.rs ← Benchmark binary                 │
+│    │                                                            │
+│    └─ [delete nested claude-session-tui/Cargo.toml]  ← DELETE │
+└─────────────────────────────────────────────────────────────────┘
+

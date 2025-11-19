@@ -1,0 +1,300 @@
+================================================================================
+                    CARGO BINARY AMBIGUITY ANALYSIS
+                Repository: /Users/tryk/nabia/tools/claude-manager
+                     Analysis Date: 2025-11-05
+================================================================================
+
+EXECUTIVE SUMMARY
+================================================================================
+
+The repository has a fundamentally broken Cargo configuration with 4 critical 
+issues preventing `cargo run` from working:
+
+1. MISSING ROOT CARGO.TOML
+   - No Cargo.toml at /Users/tryk/nabia/tools/claude-manager/
+   - Prevents running cargo commands from repo root
+   - Users must cd into claude-session-tui/ subdirectory
+
+2. DUPLICATE NESTED CARGO.TOML FILES
+   - Found 2 nearly identical Cargo.toml files:
+     a) /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml
+     b) /Users/tryk/nabia/tools/claude-manager/claude-session-tui/claude-session-tui/Cargo.toml
+   - Both define same package "claude-session-tui"
+   - Both reference same src/ directory
+   - Violates Rust/Cargo conventions (1 package = 1 Cargo.toml)
+
+3. MULTIPLE BINARIES WITH NO DEFAULT
+   - Cargo.toml defines 2 binaries in same package:
+     a) "claude-session-tui" (requires feature "tui")
+     b) "benchmark" (no feature requirements)
+   - `cargo run` fails because Cargo can't determine which to execute
+   - Error: "error: `cargo run` requires that a package only have one binary 
+            target at the root of the src directory"
+
+4. FEATURE REQUIREMENTS MISMATCH
+   - [features] default = []  (EMPTY)
+   - [[bin]] required-features = ["tui"]  (REQUIRES this)
+   - Main binary can't build without explicit --features tui flag
+
+
+DIRECTORY STRUCTURE
+================================================================================
+
+Current broken structure:
+
+/Users/tryk/nabia/tools/claude-manager/          [NO Cargo.toml - PROBLEM #1]
+├── claude-session-tui/
+│   ├── Cargo.toml                               [CARGO.TOML #1]
+│   │   - Package: claude-session-tui
+│   │   - Binaries: [claude-session-tui, benchmark]  [PROBLEM #3]
+│   │   - Features: default = []                 [PROBLEM #4]
+│   ├── src/
+│   │   ├── main.rs      (requires feature "tui")
+│   │   ├── lib.rs
+│   │   └── bin/benchmark.rs
+│   └── claude-session-tui/
+│       └── Cargo.toml                           [CARGO.TOML #2 - DELETE THIS]
+│           - DUPLICATE of parent Cargo.toml
+│           - Should NOT exist
+│           - Creates confusion about package structure
+
+
+CARGO.TOML CONTENTS
+================================================================================
+
+Both Cargo.toml files define:
+
+[package]
+name = "claude-session-tui"
+version = "0.1.0"
+
+[features]
+default = []          ← PROBLEM: Empty defaults
+tui = []              ← Main binary requires this
+v2 = [...]
+shadow = [...]
+
+[[bin]]
+name = "claude-session-tui"
+path = "src/main.rs"
+required-features = ["tui"]   ← Can't build without feature
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+# No required-features     ← Different requirement
+
+[lib]
+name = "claude_session_tui"
+path = "src/lib.rs"
+
+
+IMPACT ANALYSIS
+================================================================================
+
+What currently DOESN'T work:
+
+✗ cargo run                              (from repo root)
+  Error: Could not find Cargo.toml
+
+✗ cargo run                              (from claude-session-tui/)
+  Error: Multiple binaries found, ambiguous
+
+✗ cargo run --features tui              (from claude-session-tui/)
+  Error: Still ambiguous - two binaries without default
+
+✓ cargo run --bin claude-session-tui --features tui
+  Works (if lib compiles correctly)
+
+✓ cargo run --bin benchmark
+  Works (if lib compiles correctly)
+
+
+What SHOULD work after fix:
+
+✓ cargo run                              (from any directory)
+✓ cargo build --release
+✓ cargo test
+✓ cargo doc
+
+
+ROOT CAUSES
+================================================================================
+
+This appears to be the result of incomplete refactoring:
+
+1. Original: Created claude-session-tui/ as a subproject
+2. Iteration: Someone nested another claude-session-tui/ inside
+3. Incomplete: Never consolidated the Cargo.toml files or fixed feature flags
+4. Result: Confusing, non-standard, broken architecture
+
+
+RECOMMENDED FIXES (Priority Order)
+================================================================================
+
+OPTION A: Workspace Structure (RECOMMENDED)
+─────────────────────────────────────────────
+
+Suitable for monorepo with multiple projects.
+
+/Users/tryk/nabia/tools/claude-manager/
+├── Cargo.toml  [NEW - WORKSPACE ROOT]
+│   [workspace]
+│   members = ["claude-session-tui"]
+│
+└── claude-session-tui/
+    ├── Cargo.toml  [KEEP - Update features]
+    │   [features]
+    │   default = ["tui"]  ← FIX THIS
+    │
+    └── src/
+        ├── main.rs
+        ├── lib.rs
+        ├── bin/benchmark.rs
+        └── [modules]
+
+Implementation steps:
+1. Create /Users/tryk/nabia/tools/claude-manager/Cargo.toml with workspace config
+2. Delete /Users/tryk/nabia/tools/claude-manager/claude-session-tui/claude-session-tui/Cargo.toml
+3. Update /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml:
+   Change [features] default = [] to default = ["tui"]
+
+Result: Works from repo root, follows Rust best practices
+
+
+OPTION B: Single Project Structure
+─────────────────────────────────────
+
+Simpler, single package at repository root.
+
+/Users/tryk/nabia/tools/claude-manager/
+├── Cargo.toml  [UPDATE - Main package]
+│   name = "claude-session-tui"
+│   [features]
+│   default = ["tui"]  ← FIX
+│
+├── src/
+│   ├── main.rs
+│   ├── lib.rs
+│   ├── bin/benchmark.rs
+│   └── [modules]
+├── tests/
+└── docs/
+
+Implementation steps:
+1. Delete entire /Users/tryk/nabia/tools/claude-manager/claude-session-tui/claude-session-tui/ dir
+2. Move src/ to /Users/tryk/nabia/tools/claude-manager/src/ (if nested)
+3. Keep one Cargo.toml at repo root
+4. Update features: default = ["tui"]
+
+Result: Simpler, flatter structure
+
+
+OPTION C: Keep Current Layout (Quick Fix)
+──────────────────────────────────────────
+
+Minimal changes, keep nested claude-session-tui/ directory.
+
+Implementation steps:
+1. Delete /Users/tryk/nabia/tools/claude-manager/claude-session-tui/claude-session-tui/Cargo.toml
+2. Update /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml:
+   Change [features] default = [] to default = ["tui"]
+3. Create /Users/tryk/nabia/tools/claude-manager/Cargo.toml as workspace root:
+   [workspace]
+   members = ["claude-session-tui"]
+
+Result: Fixes issues but keeps current directory organization
+
+
+TESTING CURRENT STATE
+================================================================================
+
+Run these to verify the problems:
+
+# Test 1: From repo root (will fail)
+$ cd /Users/tryk/nabia/tools/claude-manager
+$ cargo run
+❌ Error: Could not find Cargo.toml
+
+# Test 2: From subproject (will fail with ambiguity)
+$ cd /Users/tryk/nabia/tools/claude-manager/claude-session-tui
+$ cargo run
+❌ Error: Multiple binaries found
+
+# Test 3: With explicit binary and features (should work)
+$ cargo run --bin claude-session-tui --features tui
+✓ Should execute successfully
+
+# Test 4: Benchmark binary (should work)
+$ cargo run --bin benchmark
+✓ Should execute successfully
+
+
+FILES TO MODIFY
+================================================================================
+
+Required changes:
+
+1. CREATE:
+   /Users/tryk/nabia/tools/claude-manager/Cargo.toml
+   (workspace root config)
+
+2. DELETE:
+   /Users/tryk/nabia/tools/claude-manager/claude-session-tui/claude-session-tui/Cargo.toml
+   (duplicate package definition)
+
+3. UPDATE:
+   /Users/tryk/nabia/tools/claude-manager/claude-session-tui/Cargo.toml
+   Change: [features] default = [] to default = ["tui"]
+
+
+SUMMARY TABLE
+================================================================================
+
+Issue                      Current State              Recommended
+─────────────────────────────────────────────────────────────────────
+Root Cargo.toml            Missing                    Create at repo root
+Cargo.toml count           2 (duplicates)             1 (or 1 + workspace)
+Cargo.toml locations       Nested duplicate           Flat or workspace
+Multiple binaries          2 (ambiguous)              Clear default
+Default features           Empty []                   default = ["tui"]
+Feature requirements       Mismatch                   Aligned with default
+Repository structure       Confusing                  Clear hierarchy
+
+
+NEXT STEPS
+================================================================================
+
+1. CHOOSE AN OPTION
+   - Option A (Workspace) recommended for monorepo
+   - Option B (Flat) recommended for single project
+   - Option C (Quick fix) if constraints require keeping current layout
+
+2. IMPLEMENT
+   - Create/delete/update Cargo.toml files as chosen option
+   - Ensure all path references are correct
+
+3. TEST
+   - Run the testing commands above
+   - Verify cargo run works from repo root
+   - Test both binaries and library
+
+4. DOCUMENT
+   - Update README with Cargo commands
+   - Document binary selection (which is default)
+   - Add to CLAUDE.md for future reference
+
+
+REFERENCE DOCUMENTATION
+================================================================================
+
+Rust Cargo documentation:
+- Workspaces: https://doc.rust-lang.org/cargo/reference/workspaces.html
+- Features: https://doc.rust-lang.org/cargo/reference/features.html
+- Binary targets: https://doc.rust-lang.org/cargo/reference/cargo-toml.html#binary-targets
+
+
+================================================================================
+Analysis completed: 2025-11-05
+For detailed explanation, see CARGO_BINARY_AMBIGUITY_ANALYSIS.md
+================================================================================

@@ -1,0 +1,11 @@
+/Users/tryk/nabia/tools/claude-manager/target/debug/deps/bitpacking-b8771565d734ca73.d: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros_simple.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker1x_simple.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker4x_simple.rs
+
+/Users/tryk/nabia/tools/claude-manager/target/debug/deps/libbitpacking-b8771565d734ca73.rlib: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros_simple.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker1x_simple.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker4x_simple.rs
+
+/Users/tryk/nabia/tools/claude-manager/target/debug/deps/libbitpacking-b8771565d734ca73.rmeta: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros_simple.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker1x_simple.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker4x_simple.rs
+
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/lib.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/macros_simple.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker1x_simple.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitpacking-0.9.2/src/bitpacker4x_simple.rs:

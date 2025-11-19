@@ -30,6 +30,7 @@ futures = "0.3"
 num_cpus = "1.16"
 dirs = "5.0"
 shellexpand = "3.1"
+atty = "0.2"
 
 # V2 Shadow Renaissance Architecture dependencies
 async-trait = { version = "0.1", optional = true }
@@ -52,7 +53,7 @@ tui-input = "0.8"
 textwrap = "0.16"
 
 [features]
-default = []
+default = ["tui"]
 tui = []
 v2 = ["async-trait", "pin-project"]
 shadow = ["v2"]

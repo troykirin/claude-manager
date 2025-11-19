@@ -1,4 +1,4 @@
-# Claude Manager Project Identity
+# File: ~/nabia/tools/claude-manager/CLAUDE.md
 
 **Project**: claude-manager
 **Location**: `~/nabia/tools/claude-manager/`

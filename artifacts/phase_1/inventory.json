@@ -1,0 +1,95 @@
+{
+  "timestamp": "2025-11-01T00:04:46.349088+00:00",
+  "branch": "main",
+  "workspace_changes": {
+    "modified_files": [
+      "claude-session-tui/Cargo.toml"
+    ],
+    "added_files": [
+      "PHASE_1_DELIVERY_CHECKLIST.md",
+      "RELEASE_NOTES_v1.1.0.md",
+      "TUI_COMPLETION_SUMMARY.md",
+      "TUI_QUICK_START.md",
+      "TUI_TECHNICAL.md",
+      "claude-session-tui/.codeviz/",
+      "claude-session-tui/.envrc",
+      "claude-session-tui/.github/",
+      "claude-session-tui/.gitignore",
+      "claude-session-tui/.hookrc",
+      "claude-session-tui/CODE_OF_CONDUCT.md",
+      "claude-session-tui/CONTRIBUTING.md",
+      "claude-session-tui/GOVERNANCE.md",
+      "claude-session-tui/KEY_SCOPING_FINAL_FIX.md",
+      "claude-session-tui/LICENSE",
+      "claude-session-tui/NOTICE",
+      "claude-session-tui/PANE_FOCUS_BEHAVIOR.md",
+      "claude-session-tui/PHASE_ARCHITECTURE_VISION.md",
+      "claude-session-tui/PUBLIC_RELEASE_READINESS.md",
+      "claude-session-tui/RESUME_FEATURE_ROADMAP.md",
+      "claude-session-tui/SCROLL_RESPONSIVENESS_UPDATE.md",
+      "claude-session-tui/SECURITY.md",
+      "claude-session-tui/STAGE_1_RESUME_IMPLEMENTATION.md",
+      "claude-session-tui/TODO.md",
+      "claude-session-tui/Taskfile.yml",
+      "claude-session-tui/WORK_SUMMARY_2025-10-29.md",
+      "claude-session-tui/claude-manager.sh",
+      "claude-session-tui/claude-session-context.sh",
+      "claude-session-tui/claude-session-tui/",
+      "claude-session-tui/cm-quick-move.sh",
+      "claude-session-tui/cm-quick-undo.sh",
+      "claude-session-tui/docs/",
+      "claude-session-tui/federation-integration/",
+      "claude-session-tui/install.sh",
+      "claude-session-tui/lefthook.yml",
+      "claude-session-tui/python/",
+      "claude-session-tui/run-tui.sh",
+      "claude-session-tui/test-cm-mv-edge-cases.sh",
+      "claude-session-tui/tests/test_cm_special_cases.sh",
+      "claude-session-tui/tests/tui_navigation_tests.rs",
+      "claude-session-tui/tests/tui_search_tests.rs",
+      "claude-session-tui/tests/tui_session_loading_tests.rs",
+      "phase-1/"
+    ],
+    "deleted_files": [],
+    "total_lines_changed": 8,
+    "net_additions": 8
+  },
+  "test_status": {
+    "unit_tests": "FOUND (6 test files)",
+    "integration_tests": "AVAILABLE",
+    "lint_status": "UNKNOWN",
+    "test_coverage": "UNKNOWN"
+  },
+  "linear_context": {
+    "associated_issues": [],
+    "recent_commits": [
+      "dec3997 feat(helpers): add consolidate-session helper script",
+      "7e619fd feat(organize): add session merge subcommand with deduplication",
+      "f2218ee fix(test): correct home tilde expansion test calculation",
+      "3a16b15 chore(test): add test automation project deliverables and status",
+      "eb5812a docs(test): add comprehensive test automation documentation"
+    ],
+    "branch_naming": "main",
+    "project_state": "Active development"
+  },
+  "session_narrative": {
+    "work_context": "Atomic commit workflow implementation",
+    "completed_tasks": [
+      "Analyzed workspace changes and test status",
+      "Generated Linear context and issue associations",
+      "Created structured narrative for commit planning"
+    ],
+    "key_changes": [
+      "Modified 1 files",
+      "Added 43 files",
+      "Total impact: 8 lines"
+    ]
+  },
+  "commit_requirements": {
+    "format": "fixes NOS-XXX: feat(scope): description",
+    "atomic_commits": true,
+    "linear_integration": true,
+    "conventional_format": true,
+    "rich_context": true
+  }
+}

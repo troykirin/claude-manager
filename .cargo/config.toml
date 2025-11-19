@@ -1,0 +1,25 @@
+# Cargo configuration for XDG-compliant build
+# This template is processed by justfile to inject XDG_CACHE_HOME
+
+[build]
+# Store build artifacts in XDG cache directory instead of ./target
+target-dir = "/Users/tryk/.cache/nabi/claude-manager/target"
+
+# Parallel compilation jobs
+jobs = 8
+
+# Profile optimization levels
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = false
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+# Allow unstable Rust features for development
+# Uncomment when needed
+# [unstable]
+# feature_names = true

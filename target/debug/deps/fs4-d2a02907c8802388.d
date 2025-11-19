@@ -1,0 +1,12 @@
+/Users/tryk/nabia/tools/claude-manager/target/debug/deps/fs4-d2a02907c8802388.d: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix/sync_impl.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/fs_stats.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext/sync_impl.rs
+
+/Users/tryk/nabia/tools/claude-manager/target/debug/deps/libfs4-d2a02907c8802388.rlib: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix/sync_impl.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/fs_stats.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext/sync_impl.rs
+
+/Users/tryk/nabia/tools/claude-manager/target/debug/deps/libfs4-d2a02907c8802388.rmeta: /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/lib.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix/sync_impl.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/fs_stats.rs /Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext/sync_impl.rs
+
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/lib.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/unix/sync_impl.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/fs_stats.rs:
+/Users/tryk/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fs4-0.8.4/src/file_ext/sync_impl.rs:

@@ -1,0 +1,7 @@
+#compdef claude-session-tui
+# Zsh completion for claude-session-tui
+
+_arguments -S \
+  '(-d --dir)'{-d,--dir}'[Directory with .jsonl files (default: ~/.claude/projects)]:path:_directories' \
+  '(--since)[--since][Only load sessions from the past <time> (e.g., 7d, 1w, 24h)]:time:(7d 1w 24h 1d 3d)' \
+  '(-h --help)'{-h,--help}'[Show help message]'

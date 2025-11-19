@@ -16,6 +16,8 @@ pub struct Session {
     pub statistics: SessionStatistics,
     pub tool_usage: ToolUsageStats,
     pub working_context: WorkingContext,
+    #[serde(default)]
+    pub resurrection: ResurrectionMetadata,
 }
 
 /// Comprehensive session metadata
@@ -591,6 +593,7 @@ impl Session {
                 error_patterns: Vec::new(),
                 solution_patterns: Vec::new(),
             },
+            resurrection: ResurrectionMetadata::default(),
         }
     }
 
@@ -638,6 +641,49 @@ impl Session {
         let last_timestamp = self.blocks.last()?.timestamp;
 
         Some(last_timestamp - first_timestamp)
+    }
+}
+
+/// Tmux session metadata enrichment
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TmuxMetadata {
+    /// Tmux session name
+    pub session_name: Option<String>,
+    /// Number of windows in session
+    pub window_count: usize,
+    /// Number of panes in session
+    pub pane_count: usize,
+    /// Working directory of main pane
+    pub working_directory: Option<String>,
+    /// Shell command running in main pane
+    pub shell_command: Option<String>,
+    /// Time of last backup
+    pub last_backup_time: Option<DateTime<Utc>>,
+    /// Whether session is still active
+    pub is_active: bool,
+}
+
+/// Complete resurrection metadata for tmux session linking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResurrectionMetadata {
+    /// Tmux metadata if available
+    pub tmux: TmuxMetadata,
+    /// Confidence score for path matching (0.0 - 1.0)
+    pub path_match_confidence: f64,
+    /// Whether this Claude session has associated tmux history
+    pub has_tmux_history: bool,
+    /// Summary of what was happening in tmux
+    pub activity_summary: Option<String>,
+}
+
+impl Default for ResurrectionMetadata {
+    fn default() -> Self {
+        Self {
+            tmux: TmuxMetadata::default(),
+            path_match_confidence: 0.0,
+            has_tmux_history: false,
+            activity_summary: None,
+        }
     }
 }
 
